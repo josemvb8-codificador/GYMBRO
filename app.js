@@ -2,7 +2,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.0.1';
+  const VERSION = '3.0.0';
   const KEY = 'gymbro.v1';
   const MUSCLES = window.GB_MUSCLES;
   const BASE_EX = window.GB_EXERCISES;
@@ -19,6 +19,9 @@
   /* ---------------- Datos ---------------- */
   const defaults = () => ({
     settings: { unit: 'kg', rest: 90, sound: true, vibrate: true },
+    profile: null,
+    body: [],
+    mealPlan: null,
     custom: [],
     routines: [],
     history: [],
@@ -62,12 +65,21 @@
   const muscleName = (id) => (MUSCLES.find((m) => m.id === id) || { n: id }).n;
   const allEx = () => BASE_EX.concat(db.custom);
   const exById = (id) => BASE_EX.find((e) => e.id === id) || db.custom.find((e) => e.id === id) || LEGACY.find((e) => e.id === id) || { id, n: 'Ejercicio eliminado', m: 'core', p: [], e: '', d: '' };
-  const imgSrc = (ex, f) => `img/ex/${ex.id}-${f}.webp`;
+  // Fotos reales (versión 1) o animaciones 3D (versión 2), a elegir en Ajustes
+  const PHOTO_IDS = new Set(["abduccion-lateral", "abduccion-maquina", "aperturas", "bici-estatica", "caminata-banda", "cinta", "comba", "cruce-poleas", "crunch", "crunch-bicicleta", "crunch-polea", "curl-barra", "curl-concentrado", "curl-femoral", "curl-mancuernas", "curl-martillo", "curl-polea", "curl-predicador", "dead-bug", "dominadas", "dominadas-supinas", "elevacion-piernas", "elevacion-piernas-colgado", "elevaciones-frontales", "elevaciones-laterales", "elevaciones-laterales-banda", "eliptica", "extension-cuadriceps", "extension-polea", "extension-sobre-cabeza", "face-pull", "flexiones", "flexiones-declinadas", "flexiones-diamante", "flexiones-inclinadas", "flexiones-pino", "fondos-paralelas", "fondos-silla", "hip-thrust", "jalon-pecho", "jumping-jacks", "mountain-climbers", "pajaros", "pantorrillas", "patada-polea", "patada-triceps", "peso-muerto", "peso-muerto-rumano", "peso-muerto-rumano-mancuernas", "plancha", "plancha-lateral", "prensa", "press-banca", "press-frances", "press-hombro-banda", "press-hombro-mancuernas", "press-inclinado-mancuernas", "press-mancuernas", "press-maquina-pecho", "press-militar", "puente-gluteo", "puente-una-pierna", "pullover", "remo-barra", "remo-ergometro", "remo-invertido", "remo-mancuerna", "remo-polea-baja", "rueda-abdominal", "russian-twist", "sentadilla-barra", "sentadilla-bulgara", "sentadilla-goblet", "sentadilla-libre", "sentadilla-salto", "separacion-banda", "step-up", "superman", "zancadas"]);
+  const imgStyle = () => db.settings.imgStyle || 'foto';
+  const usePhoto = (ex) => imgStyle() === 'foto' && PHOTO_IDS.has(ex.id);
+  const imgSrc = (ex, f) => (usePhoto(ex) ? `img/foto/${ex.id}-${f}.webp` : `img/ex/${ex.id}-${f}.webp`);
   const thumb = (ex, cls = '') => ex.img
     ? `<img class="thumb ${cls}" src="${imgSrc(ex, 't')}" alt="" loading="lazy" decoding="async">`
     : `<span class="avatar ${cls}">${esc(initials(ex.n))}</span>`;
   const animSrc = (ex) => `img/ex/${ex.id}.webp`;
-  const demoHtml = (ex) => ex.img
+  const demoHtml = (ex) => usePhoto(ex)
+    ? `<div class="demo photo" role="img" aria-label="Demostración: ${esc(ex.n)}">
+         <img src="${imgSrc(ex, 0)}" alt="" decoding="async"><img class="b" src="${imgSrc(ex, 1)}" alt="" decoding="async">
+         <span class="demo-badge"><i></i>Demostración</span>
+       </div>`
+    : ex.img
     ? `<div class="demo" role="img" aria-label="Animación: ${esc(ex.n)}">
          <img src="${animSrc(ex)}" alt="" decoding="async">
          <span class="demo-badge"><i></i>En movimiento</span>
@@ -240,10 +252,10 @@
   const ui = {
     tab: 'train',
     lib: { q: '', place: 'all', muscle: 'all' },
-    histMode: 'sessions'
+    histMode: 'body'
   };
 
-  const TITLES = { train: 'GYMBRO', routines: 'Rutinas', library: 'Ejercicios', history: 'Progreso' };
+  const TITLES = { train: 'GYMBRO', routines: 'Rutinas', library: 'Ejercicios', nutrition: 'Nutrición', history: 'Progreso' };
 
   function setTab(tab) {
     ui.tab = tab;
@@ -255,7 +267,7 @@
   function render() {
     $('#title').textContent = ui.tab === 'train' && db.active ? 'Entrenando' : TITLES[ui.tab];
     const view = $('#view');
-    const fn = { train: renderTrain, routines: renderRoutines, library: renderLibrary, history: renderHistory }[ui.tab];
+    const fn = { train: renderTrain, routines: renderRoutines, library: renderLibrary, nutrition: renderNutrition, history: renderHistory }[ui.tab];
     view.innerHTML = fn();
     const trainBtn = document.querySelector('.tabbar [data-tab="train"]');
     trainBtn.querySelector('.dot')?.remove();
@@ -290,6 +302,17 @@
           ${WEEK_ORDER.map((d) => `<div class="${doneDays.has(d) ? 'done' : ''} ${d === today ? 'today' : ''}">${DAY_SHORT[d]}<i></i></div>`).join('')}
         </div>
       </section>`;
+
+    const T = profileReady() ? nutritionTargets() : null;
+    html += T
+      ? `<button class="card tap nutri-mini" data-action="go-nutrition">
+          <span class="nm-i">🍽️</span>
+          <span class="grow"><b>${fmtN(T.kcal)} kcal hoy</b><small>Proteína ${T.p} g · Carbos ${T.c} g · Grasa ${T.f} g</small></span>${ICON.chev}
+        </button>`
+      : `<button class="card tap nutri-mini" data-action="edit-profile">
+          <span class="nm-i">📏</span>
+          <span class="grow"><b>Completa tu perfil</b><small>Calorías, comidas e índices personales (IMC, % grasa…)</small></span>${ICON.chev}
+        </button>`;
 
     if (!db.routines.length) {
       html += `
@@ -822,6 +845,7 @@
     ham: ['curl-femoral', 'peso-muerto-rumano-mancuernas', 'puente-una-pierna', 'superman'],
     glute: ['hip-thrust', 'abduccion-maquina', 'caminata-banda', 'puente-una-pierna', 'extension-cadera-banda', 'abduccion-lateral', 'puente-gluteo'],
     calf: ['pantorrillas'],
+    abd: ['abduccion-maquina', 'caminata-banda', 'abduccion-lateral'],
     core: ['crunch-polea', 'plancha', 'elevacion-piernas-colgado', 'crunch-bicicleta', 'dead-bug', 'elevacion-piernas', 'plancha-lateral', 'russian-twist', 'crunch'],
     cardio: ['cinta', 'bici-estatica', 'remo-ergometro', 'eliptica', 'mountain-climbers', 'burpees', 'jumping-jacks', 'sentadilla-salto']
   };
@@ -836,10 +860,26 @@
     lowA: { n: 'Pierna A', s: [['sq', 0], ['hinge', 0], ['quadIso', 0], ['ham', 0], ['glute', 0], ['calf', 0], ['core', 0]] },
     lowB: { n: 'Pierna B', s: [['hinge', 1], ['sq2', 0], ['glute', 0], ['ham', 0], ['quadIso', 1], ['calf', 0], ['core', 1]] },
     push: { n: 'Empuje', s: [['pushH', 0], ['pushV', 0], ['pushInc', 0], ['lat', 0], ['tri', 0], ['tri', 1], ['core', 0]] },
-    pull: { n: 'Tirón', s: [['pullV', 0], ['pullH', 0], ['pullH', 0], ['rear', 0], ['bi', 0], ['bi', 1], ['core', 1]] }
+    pull: { n: 'Tirón', s: [['pullV', 0], ['pullH', 0], ['pullH', 0], ['rear', 0], ['bi', 0], ['bi', 1], ['core', 1]] },
+    fullG: { n: 'Full body glúteo', s: [['glute', 0], ['sq', 0], ['pushH', 0], ['pullH', 0], ['hinge', 0], ['abd', 0], ['core', 0], ['pushV', 0], ['ham', 0]] },
+    lowG: { n: 'Glúteo y pierna', s: [['glute', 0], ['sq2', 0], ['hinge', 0], ['abd', 0], ['ham', 0], ['glute', 1], ['calf', 0], ['core', 0]] },
+    arms: { n: 'Hombro y brazo', s: [['pushV', 0], ['lat', 0], ['bi', 0], ['tri', 0], ['bi', 1], ['tri', 1], ['rear', 0], ['core', 0]] }
   };
+  const FOCUS = [
+    { id: 'equilibrado', n: 'Equilibrado', d: 'Todo el cuerpo por igual', i: '⚖️' },
+    { id: 'gluteos', n: 'Glúteos y piernas', d: 'Más volumen para tren inferior', i: '🍑' },
+    { id: 'superior', n: 'Tren superior', d: 'Más pecho, espalda, hombros y brazos', i: '💪' }
+  ];
 
-  function splitFor(n, level) {
+  function splitFor(n, level, focus) {
+    if (focus === 'gluteos') {
+      return [[['fullG', 0]], [['fullG', 0], ['fullB', 0]], [['lowG', 0], ['upA', 0], ['lowG', 1]], [['lowG', 0], ['upA', 0], ['lowG', 1], ['upB', 0]],
+        [['lowG', 0], ['upA', 0], ['lowA', 0], ['upB', 0], ['lowG', 1]], [['lowG', 0], ['push', 0], ['pull', 0], ['lowG', 1], ['upA', 0], ['lowB', 0]]][Math.min(n, 6) - 1];
+    }
+    if (focus === 'superior') {
+      return [[['fullA', 0]], [['upA', 0], ['fullB', 0]], [['upA', 0], ['lowA', 0], ['upB', 0]], [['upA', 0], ['lowA', 0], ['upB', 0], ['arms', 0]],
+        [['upA', 0], ['lowA', 0], ['push', 0], ['pull', 0], ['arms', 0]], [['push', 0], ['pull', 0], ['lowA', 0], ['push', 1], ['pull', 1], ['arms', 0]]][Math.min(n, 6) - 1];
+    }
     if (n <= 1) return [['fullA', 0]];
     if (n === 2) return [['fullA', 0], ['fullB', 0]];
     if (n === 3) return level === 'avanzado' ? [['push', 0], ['pull', 0], ['lowA', 0]] : [['fullA', 0], ['fullB', 0], ['fullC', 0]];
@@ -895,7 +935,7 @@
 
   function generatePlan(g) {
     const days = WEEK_ORDER.filter((d) => g.days.includes(d));
-    const split = splitFor(days.length, g.level);
+    const split = splitFor(days.length, g.level, g.focus);
     const perDay = { 30: 4, 45: 5, 60: 6, 75: 7 }[g.dur] - (g.level === 'principiante' && g.dur > 45 ? 1 : 0);
     const goal = GOALS.find((x) => x.id === g.goal);
     const level = LEVELS.find((x) => x.id === g.level);
@@ -921,15 +961,16 @@
         const ex = SLOTS[fill[k]].map(exById).find((e) => exAvailable(e, g) && !used.has(e.id));
         if (ex) { used.add(ex.id); items.push({ exId: ex.id, ...prescription(fill[k], ex, g, items.length) }); }
       }
-      const name = t.n + (vOff && /Empuje|Tirón/.test(t.n) ? ' B' : '') + (g.place === 'casa' ? ' · Casa' : '');
+      const name = t.n + (vOff && /Empuje|Tirón|Glúteo/.test(t.n) ? ' B' : '') + (g.place === 'casa' ? ' · Casa' : '');
       return { id: uid(), name, days: [days[i]], items, note: `${goal.n} · ${level.n}` };
     });
   }
 
   function openGenerator() {
-    const g = { step: 0, goal: null, place: null, equip: [], level: null, days: DEFAULT_DAYS[3].slice(), dur: 60, seed: 0, replace: db.routines.length > 0 };
+    const pSex = db.profile && db.profile.sex ? db.profile.sex : null;
+    const g = { step: 0, goal: null, sex: pSex, focus: pSex === 'm' ? 'gluteos' : 'equilibrado', place: null, equip: [], level: null, days: DEFAULT_DAYS[3].slice(), dur: 60, seed: 0, replace: db.routines.length > 0 };
     let plan = null;
-    const STEPS = 5;
+    const STEPS = 6;
     const optCard = (action, o, on) => `
       <button class="opt ${on ? 'on' : ''}" data-action="${action}" data-v="${o.id}">
         <span class="opt-i">${o.i}</span><span class="grow"><b>${esc(o.n)}</b><small>${esc(o.d)}</small></span>
@@ -938,7 +979,14 @@
     const stepBody = () => {
       const dots = `<div class="wiz-dots">${Array.from({ length: STEPS }, (_, k) => `<i class="${k <= g.step ? 'on' : ''}"></i>`).join('')}</div>`;
       if (g.step === 0) return dots + `<h3 class="wiz-q">¿Cuál es tu objetivo?</h3><div class="opts">${GOALS.map((o) => optCard('g-goal', o, g.goal === o.id)).join('')}</div>`;
-      if (g.step === 1) return dots + `<h3 class="wiz-q">¿Dónde vas a entrenar?</h3>
+      if (g.step === 1) return dots + `<h3 class="wiz-q">¿Para quién es la rutina?</h3>
+        <div class="seg big-seg" style="margin-bottom:16px">
+          <button class="${g.sex === 'h' ? 'on' : ''}" data-action="g-sex" data-v="h">👨 Hombre</button>
+          <button class="${g.sex === 'm' ? 'on' : ''}" data-action="g-sex" data-v="m">👩 Mujer</button>
+        </div>
+        ${g.sex ? `<div class="section-title">¿Qué quieres priorizar?</div><div class="opts">${FOCUS.map((o) => optCard('g-focus', o, g.focus === o.id)).join('')}</div>
+        <p class="muted small">${g.sex === 'm' ? 'Para mujeres sugerimos más glúteos y piernas, pero puedes elegir lo que prefieras.' : 'Elige equilibrado si no tienes una preferencia clara.'}</p>` : ''}`;
+      if (g.step === 2) return dots + `<h3 class="wiz-q">¿Dónde vas a entrenar?</h3>
         <div class="opts">
           ${optCard('g-place', { id: 'gym', n: 'En el gimnasio', d: 'Máquinas, barras, poleas y mancuernas', i: '🏋️' }, g.place === 'gym')}
           ${optCard('g-place', { id: 'casa', n: 'En casa', d: 'Con tu peso corporal y lo que tengas', i: '🏠' }, g.place === 'casa')}
@@ -946,8 +994,8 @@
         ${g.place === 'casa' ? `<div class="section-title">¿Qué material tienes?</div>
           <div class="chips wrap">${EQUIP.map((q) => `<button class="chip ${g.equip.includes(q.id) ? 'on' : ''}" data-action="g-equip" data-v="${q.id}">${esc(q.n)}</button>`).join('')}</div>
           <p class="muted small">Si no marcas nada, la rutina será solo con peso corporal (suelo, silla y mesa).</p>` : ''}`;
-      if (g.step === 2) return dots + `<h3 class="wiz-q">¿Cuál es tu nivel?</h3><div class="opts">${LEVELS.map((o) => optCard('g-level', o, g.level === o.id)).join('')}</div>`;
-      if (g.step === 3) return dots + `<h3 class="wiz-q">¿Cuántos días por semana?</h3>
+      if (g.step === 3) return dots + `<h3 class="wiz-q">¿Cuál es tu nivel?</h3><div class="opts">${LEVELS.map((o) => optCard('g-level', o, g.level === o.id)).join('')}</div>`;
+      if (g.step === 4) return dots + `<h3 class="wiz-q">¿Cuántos días por semana?</h3>
         <div class="chips wrap" style="margin-bottom:14px">${[2, 3, 4, 5, 6].map((n) => `<button class="chip big ${g.days.length === n ? 'on' : ''}" data-action="g-ndays" data-v="${n}">${n} días</button>`).join('')}</div>
         <div class="field"><span>Elige qué días</span>
           <div class="days">${WEEK_ORDER.map((d) => `<button class="${g.days.includes(d) ? 'on' : ''}" data-action="g-day" data-d="${d}">${DAY_NAME[d].slice(0, 3)}</button>`).join('')}</div>
@@ -955,11 +1003,11 @@
         <div class="field"><span>Tiempo por sesión</span>
           <div class="seg">${DURATIONS.map(([v, l]) => `<button class="${g.dur === v ? 'on' : ''}" data-action="g-dur" data-v="${v}">${l}</button>`).join('')}</div>
         </div>
-        <p class="muted small">${splitInfo(g.days.length, g.level)}</p>`;
-      // Paso 4: vista previa
+        <p class="muted small">${splitInfo(g.days.length, g.level, g.focus)}</p>`;
+      // Paso 5: vista previa
       plan = generatePlan(g);
       return dots + `<h3 class="wiz-q">Tu plan está listo ✨</h3>
-        <p class="muted" style="margin-top:-6px">${esc(GOALS.find((x) => x.id === g.goal).n)} · ${g.place === 'casa' ? 'Casa' : 'Gimnasio'} · ${esc(LEVELS.find((x) => x.id === g.level).n)} · ${g.days.length} días · ${g.dur} min</p>
+        <p class="muted" style="margin-top:-6px">${esc(GOALS.find((x) => x.id === g.goal).n)} · ${sexName(g.sex)} · ${esc(FOCUS.find((x) => x.id === g.focus).n)} · ${g.place === 'casa' ? 'Casa' : 'Gimnasio'} · ${esc(LEVELS.find((x) => x.id === g.level).n)} · ${g.days.length} días · ${g.dur} min</p>
         ${plan.map((r) => `
           <div class="gen-day">
             <div class="gen-head"><span class="gen-dayname">${DAY_NAME[r.days[0]]}</span><b>${esc(r.name)}</b><span class="muted small">${r.items.length} ejercicios</span></div>
@@ -973,17 +1021,19 @@
         <p class="muted small">Toca un ejercicio para ver cómo se hace. Podrás editar todo después en Rutinas.</p>
         ${db.routines.length ? `<button class="set-line plain" data-action="g-replace"><span>Reemplazar mis rutinas actuales (${db.routines.length})</span><span class="switch ${g.replace ? 'on' : ''}"></span></button>` : ''}`;
     };
-    const canNext = () => [g.goal, g.place, g.level, g.days.length][g.step] != null && (g.step !== 3 || g.days.length > 0);
+    const canNext = () => [g.goal, g.sex, g.place, g.level, g.days.length][g.step] != null && (g.step !== 4 || g.days.length > 0);
     const s = openSheet({
       title: 'Armar mi rutina',
       full: true,
       body: stepBody,
-      foot: () => g.step < 4
-        ? `<div class="btn-row">${g.step > 0 ? '<button class="btn" data-action="g-back">Atrás</button>' : ''}<button class="btn primary" data-action="g-next" ${canNext() ? '' : 'disabled style="opacity:.45"'}>${g.step === 3 ? 'Crear mi plan' : 'Siguiente'}</button></div>`
+      foot: () => g.step < 5
+        ? `<div class="btn-row">${g.step > 0 ? '<button class="btn" data-action="g-back">Atrás</button>' : ''}<button class="btn primary" data-action="g-next" ${canNext() ? '' : 'disabled style="opacity:.45"'}>${g.step === 4 ? 'Crear mi plan' : 'Siguiente'}</button></div>`
         : `<button class="btn primary block" data-action="g-save">${ICON.check.replace('<svg', '<svg width="20" height="20"')} Guardar plan</button>
            <div class="btn-row" style="margin-top:8px"><button class="btn" data-action="g-back">Atrás</button><button class="btn" data-action="g-shuffle">🔄 Otra variante</button></div>`,
       actions: {
         'g-goal': (b) => { g.goal = b.dataset.v; go(1); },
+        'g-sex': (b) => { g.sex = b.dataset.v; if (!g.focusSet) g.focus = g.sex === 'm' ? 'gluteos' : 'equilibrado'; s.refresh(); },
+        'g-focus': (b) => { g.focus = b.dataset.v; g.focusSet = true; s.refresh(); },
         'g-place': (b) => { g.place = b.dataset.v; if (g.place === 'gym') go(1); else s.refresh(); },
         'g-equip': (b) => { const v = b.dataset.v; g.equip = g.equip.includes(v) ? g.equip.filter((x) => x !== v) : g.equip.concat(v); s.refresh(); },
         'g-level': (b) => { g.level = b.dataset.v; go(1); },
@@ -1009,15 +1059,15 @@
       }
     });
     function go(delta) {
-      g.step = Math.max(0, Math.min(4, g.step + delta));
+      g.step = Math.max(0, Math.min(5, g.step + delta));
       s.refresh();
       s.el.querySelector('.sheet-body').scrollTop = 0;
     }
   }
 
-  function splitInfo(n, level) {
+  function splitInfo(n, level, focus) {
     if (!n) return 'Elige al menos un día.';
-    const names = splitFor(n, level).map(([t, v]) => TEMPLATES[t].n + (v && /Empuje|Tirón/.test(TEMPLATES[t].n) ? ' B' : ''));
+    const names = splitFor(n, level, focus).map(([t, v]) => TEMPLATES[t].n + (v && /Empuje|Tirón/.test(TEMPLATES[t].n) ? ' B' : ''));
     return `Tu semana: ${names.join(' → ')}.`;
   }
 
@@ -1310,9 +1360,11 @@
   /* ================= HISTORIAL / PROGRESO ================= */
   function renderHistory() {
     let html = `<div class="seg" style="margin-bottom:14px">
+      <button class="${ui.histMode === 'body' ? 'on' : ''}" data-action="hist-mode" data-v="body">Mi cuerpo</button>
       <button class="${ui.histMode === 'sessions' ? 'on' : ''}" data-action="hist-mode" data-v="sessions">Sesiones</button>
-      <button class="${ui.histMode === 'progress' ? 'on' : ''}" data-action="hist-mode" data-v="progress">Por ejercicio</button>
+      <button class="${ui.histMode === 'progress' ? 'on' : ''}" data-action="hist-mode" data-v="progress">Ejercicios</button>
     </div>`;
+    if (ui.histMode === 'body') return html + renderBody();
     if (!db.history.length) {
       return html + `<div class="card empty"><div class="big">📈</div><h3>Sin entrenamientos todavía</h3><p>Cuando termines tu primer entrenamiento aparecerá aquí con tu progreso.</p><button class="btn primary block" data-action="go-train">Ir a entrenar</button></div>`;
     }
@@ -1472,11 +1524,425 @@
     });
   }
 
+  /* ================= PERFIL, MEDIDAS E ÍNDICES ================= */
+  const ACTIVITY = [
+    { id: 'sedentario', n: 'Sedentario', d: 'Trabajo sentado, poco movimiento', f: 1.2 },
+    { id: 'ligero', n: 'Ligero', d: 'Entreno 1–3 días por semana', f: 1.375 },
+    { id: 'moderado', n: 'Moderado', d: 'Entreno 3–5 días por semana', f: 1.55 },
+    { id: 'activo', n: 'Activo', d: 'Entreno 6–7 días por semana', f: 1.725 },
+    { id: 'muy', n: 'Muy activo', d: 'Entreno intenso y trabajo físico', f: 1.9 }
+  ];
+  const NUTRI_GOALS = [
+    { id: 'deficit', n: 'Perder grasa', s: 'Déficit calórico', i: '🔥' },
+    { id: 'mantener', n: 'Mantener', s: 'Recomposición', i: '⚖️' },
+    { id: 'volumen', n: 'Ganar músculo', s: 'Superávit ligero', i: '💪' }
+  ];
+  const MEASURES = [
+    { k: 'weight', n: 'Peso', u: 'kg', help: 'En ayunas, después de ir al baño.' },
+    { k: 'fat', n: '% de grasa', u: '%', help: 'Opcional, si lo mide tu báscula. Si no, lo estimamos.' },
+    { k: 'neck', n: 'Cuello', u: 'cm', help: 'Justo debajo de la nuez.' },
+    { k: 'waist', n: 'Cintura', u: 'cm', help: 'A la altura del ombligo, sin apretar.' },
+    { k: 'hip', n: 'Cadera', u: 'cm', help: 'En la parte más ancha de los glúteos.' },
+    { k: 'chest', n: 'Pecho', u: 'cm', help: 'A la altura de los pezones.' },
+    { k: 'arm', n: 'Brazo', u: 'cm', help: 'Bíceps contraído, en la parte más ancha.' },
+    { k: 'thigh', n: 'Muslo', u: 'cm', help: 'En la parte más ancha.' }
+  ];
+  const sexName = (s) => (s === 'm' ? 'Mujer' : 'Hombre');
+  const profileReady = () => db.profile && db.profile.sex && db.profile.age && db.profile.height;
+  const bodyLog = () => (db.body || []).slice().sort((a, b) => a.date - b.date);
+  // último valor conocido de cada medida
+  function latest() {
+    const out = {};
+    for (const e of bodyLog()) for (const m of MEASURES) if (e[m.k] != null) out[m.k] = e[m.k];
+    return out;
+  }
+  const fmt1 = (n) => fmtN(round(n, 1));
+
+  function indices() {
+    if (!profileReady()) return null;
+    const P = db.profile, L = latest();
+    const w = L.weight, h = P.height, hm = h / 100, age = P.age, male = P.sex !== 'm';
+    if (!w) return { noWeight: true };
+    const bmi = w / (hm * hm);
+    let fat = L.fat, fatSrc = 'báscula';
+    if (fat == null && L.waist && L.neck && (male || L.hip)) {
+      fat = male
+        ? 495 / (1.0324 - 0.19077 * Math.log10(L.waist - L.neck) + 0.15456 * Math.log10(h)) - 450
+        : 495 / (1.29579 - 0.35004 * Math.log10(L.waist + L.hip - L.neck) + 0.221 * Math.log10(h)) - 450;
+      fatSrc = 'medidas (método US Navy)';
+    }
+    if (fat == null || !Number.isFinite(fat)) { fat = 1.2 * bmi + 0.23 * age - 10.8 * (male ? 1 : 0) - 5.4; fatSrc = 'estimado por IMC y edad'; }
+    fat = Math.max(3, Math.min(60, fat));
+    const lean = w * (1 - fat / 100);
+    const ffmi = lean / (hm * hm) + 6.1 * (1.8 - hm);
+    const bmr = 10 * w + 6.25 * h - 5 * age + (male ? 5 : -161);
+    const act = ACTIVITY.find((a) => a.id === P.activity) || ACTIVITY[2];
+    const tdee = bmr * act.f;
+    return {
+      w, h, male, bmi, fat, fatSrc, lean, ffmi, bmr, tdee, act,
+      whtr: L.waist ? L.waist / h : null,
+      whr: L.waist && L.hip ? L.waist / L.hip : null,
+      healthy: [18.5 * hm * hm, 24.9 * hm * hm],
+      water: w * 0.035
+    };
+  }
+
+  // [texto, nivel] nivel: ok | warn | bad | info
+  function bmiCat(b) {
+    if (b < 18.5) return ['Bajo peso', 'warn'];
+    if (b < 25) return ['Saludable', 'ok'];
+    if (b < 30) return ['Sobrepeso', 'warn'];
+    return ['Obesidad', 'bad'];
+  }
+  function fatCat(f, male) {
+    const t = male ? [6, 14, 18, 25] : [14, 21, 25, 32];
+    if (f < t[0]) return ['Muy bajo', 'warn'];
+    if (f < t[1]) return ['Atlético', 'ok'];
+    if (f < t[2]) return ['Fitness', 'ok'];
+    if (f < t[3]) return ['Promedio', 'info'];
+    return ['Alto', 'bad'];
+  }
+  function whtrCat(r) {
+    if (r < 0.4) return ['Bajo', 'warn'];
+    if (r < 0.5) return ['Saludable', 'ok'];
+    if (r < 0.6) return ['Riesgo aumentado', 'warn'];
+    return ['Riesgo alto', 'bad'];
+  }
+  function whrCat(r, male) {
+    const lim = male ? 0.9 : 0.85;
+    return r <= lim ? ['Saludable', 'ok'] : r <= lim + 0.05 ? ['Riesgo moderado', 'warn'] : ['Riesgo alto', 'bad'];
+  }
+  function ffmiCat(v, male) {
+    const t = male ? [18, 20, 22, 25] : [14, 16, 18, 21];
+    if (v < t[0]) return ['Bajo', 'warn'];
+    if (v < t[1]) return ['Normal', 'info'];
+    if (v < t[2]) return ['Bueno', 'ok'];
+    if (v < t[3]) return ['Muy bueno', 'ok'];
+    return ['Excelente', 'ok'];
+  }
+
+  function idxCard(label, value, unitTxt, cat, sub) {
+    return `<div class="idx">
+      <span class="idx-l">${label}</span>
+      <b>${value}<small>${unitTxt || ''}</small></b>
+      ${cat ? `<span class="pill ${cat[1]}">${cat[0]}</span>` : ''}
+      ${sub ? `<span class="idx-s">${sub}</span>` : ''}
+    </div>`;
+  }
+
+  function profileCta(text) {
+    return `<div class="card empty">
+      <div class="big">📏</div><h3>Completa tu perfil</h3>
+      <p>${text}</p>
+      <button class="btn primary block" data-action="edit-profile">Completar perfil</button>
+    </div>`;
+  }
+
+  function renderBody() {
+    if (!profileReady()) return profileCta('Con tu sexo, edad, altura y peso calculamos tu IMC, % de grasa, metabolismo, calorías diarias y más.');
+    const P = db.profile, I = indices();
+    const act = ACTIVITY.find((a) => a.id === P.activity) || ACTIVITY[2];
+    let html = `
+      <button class="card tap profile-line" data-action="edit-profile">
+        <span>${P.sex === 'm' ? '👩' : '👨'} ${sexName(P.sex)} · ${P.age} años · ${P.height} cm · ${esc(act.n)}</span><span class="tag">Editar</span>
+      </button>`;
+    if (!I || I.noWeight) {
+      return html + `<div class="card empty"><div class="big">⚖️</div><h3>Registra tu peso</h3><p>Añade tu primera medición para ver tus índices.</p>
+        <button class="btn primary block" data-action="add-measure">${ICON.plus} Registrar medidas</button></div>`;
+    }
+    const log = bodyLog().filter((e) => e.weight != null);
+    const first = log[0], last = log[log.length - 1];
+    const diff = first && last && first !== last ? last.weight - first.weight : null;
+    html += `
+      <section class="hero body-hero">
+        <div class="row between">
+          <div><div class="kicker">Peso actual</div><h2>${fmt1(toDisp(I.w))} <small>${unit()}</small></h2></div>
+          ${diff != null ? `<span class="pill ${diff <= 0 ? 'ok' : 'info'}">${diff > 0 ? '+' : ''}${fmt1(toDisp(diff))} ${unit()} desde ${esc(fmtDate(first.date, { day: 'numeric', month: 'short' }))}</span>` : ''}
+        </div>
+        <button class="btn primary block" data-action="add-measure" style="margin-top:12px">${ICON.plus} Registrar medidas</button>
+      </section>
+      <div class="section-title">Tus índices</div>
+      <div class="idx-grid">
+        ${idxCard('IMC', fmt1(I.bmi), '', bmiCat(I.bmi), `Saludable: ${fmt1(toDisp(I.healthy[0]))}–${fmt1(toDisp(I.healthy[1]))} ${unit()}`)}
+        ${idxCard('% de grasa', fmt1(I.fat), '%', fatCat(I.fat, I.male), I.fatSrc)}
+        ${idxCard('Masa magra', fmt1(toDisp(I.lean)), ` ${unit()}`, null, `Grasa: ${fmt1(toDisp(I.w - I.lean))} ${unit()}`)}
+        ${idxCard('FFMI', fmt1(I.ffmi), '', ffmiCat(I.ffmi, I.male), 'Índice de masa libre de grasa')}
+        ${idxCard('Metabolismo basal', fmtN(Math.round(I.bmr)), ' kcal', null, 'Lo que gastas en reposo')}
+        ${idxCard('Gasto diario', fmtN(Math.round(I.tdee)), ' kcal', null, `Actividad: ${esc(I.act.n.toLowerCase())}`)}
+        ${I.whtr ? idxCard('Cintura / altura', fmtN(round(I.whtr, 2)), '', whtrCat(I.whtr), 'Ideal por debajo de 0,5') : idxCard('Cintura / altura', '—', '', null, 'Mide tu cintura')}
+        ${I.whr ? idxCard('Cintura / cadera', fmtN(round(I.whr, 2)), '', whrCat(I.whr, I.male), `Límite ${I.male ? '0,90' : '0,85'}`) : idxCard('Cintura / cadera', '—', '', null, 'Mide cintura y cadera')}
+        ${idxCard('Agua diaria', fmt1(I.water), ' L', null, '35 ml por kg de peso')}
+        ${idxCard('Proteína diaria', `${Math.round(I.w * 1.6)}–${Math.round(I.w * 2.2)}`, ' g', null, '1,6–2,2 g por kg')}
+      </div>`;
+    // gráfica de evolución
+    const opts = MEASURES.filter((m) => bodyLog().filter((e) => e[m.k] != null).length > 0);
+    const metric = opts.some((m) => m.k === ui.bodyMetric) ? ui.bodyMetric : 'weight';
+    const mm = MEASURES.find((m) => m.k === metric);
+    const pts = bodyLog().filter((e) => e[metric] != null).map((e) => ({ x: e.date, y: metric === 'weight' ? toDisp(e[metric]) : e[metric] }));
+    html += `<div class="section-title">Evolución</div>
+      <div class="chips" style="margin-bottom:6px">${opts.map((m) => `<button class="chip ${m.k === metric ? 'on' : ''}" data-action="body-metric" data-v="${m.k}">${m.n}</button>`).join('')}</div>
+      <div class="chart-box">${chart(pts, metric === 'weight' ? unit() : mm.u)}</div>
+      <div class="section-title">Historial de medidas</div>
+      <div class="ex-list">${bodyLog().slice().reverse().slice(0, 40).map((e) => `
+        <button class="ex-item" data-action="edit-measure" data-id="${e.id}">
+          <span class="avatar sm-date">${new Date(e.date).getDate()}<small>${esc(fmtDate(e.date, { month: 'short' }))}</small></span>
+          <span class="grow"><div class="name">${e.weight != null ? `${fmt1(toDisp(e.weight))} ${unit()}` : 'Medidas'}</div>
+          <div class="meta">${MEASURES.filter((m) => m.k !== 'weight' && e[m.k] != null).map((m) => `${m.n} ${fmt1(e[m.k])}${m.u === '%' ? '%' : ''}`).join(' · ') || '—'}</div></span>${ICON.chev}
+        </button>`).join('')}</div>
+      <p class="muted small" style="margin-top:14px">Los índices son estimaciones generales y no sustituyen la valoración de un profesional de la salud.</p>`;
+    return html;
+  }
+
+  function editProfile(after) {
+    const P = { sex: 'h', age: '', height: '', activity: 'moderado', goal: 'mantener', diet: 'omni', meals: 4, ...(db.profile || {}) };
+    const w0 = latest().weight;
+    let weight = w0 != null ? toDisp(w0) : '';
+    const s = openSheet({
+      title: 'Mi perfil',
+      full: true,
+      body: () => `
+        <div class="field"><span>Sexo</span>
+          <div class="seg"><button class="${P.sex === 'h' ? 'on' : ''}" data-action="pf-sex" data-v="h">👨 Hombre</button><button class="${P.sex === 'm' ? 'on' : ''}" data-action="pf-sex" data-v="m">👩 Mujer</button></div>
+        </div>
+        <div class="re-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:14px">
+          <label><span>Edad</span><input class="input" data-pf="age" inputmode="numeric" value="${esc(P.age)}" placeholder="30"></label>
+          <label><span>Altura (cm)</span><input class="input" data-pf="height" inputmode="numeric" value="${esc(P.height)}" placeholder="175"></label>
+          <label><span>Peso (${unit()})</span><input class="input" data-pf="weight" inputmode="decimal" value="${esc(weight === '' ? '' : fmtN(weight))}" placeholder="75"></label>
+        </div>
+        <div class="field"><span>Nivel de actividad</span>
+          <div class="opts">${ACTIVITY.map((a) => `<button class="opt slim ${P.activity === a.id ? 'on' : ''}" data-action="pf-act" data-v="${a.id}"><span class="grow"><b>${a.n}</b><small>${a.d}</small></span><span class="check">${P.activity === a.id ? ICON.check.replace('stroke-width="3"', 'stroke-width="3" width="16" height="16"') : ''}</span></button>`).join('')}</div>
+        </div>`,
+      foot: () => `<button class="btn primary block" data-action="pf-save">Guardar perfil</button>`,
+      onInput(t) {
+        if (t.dataset.pf === 'weight') weight = t.value;
+        else if (t.dataset.pf) P[t.dataset.pf] = t.value;
+      },
+      actions: {
+        'pf-sex': (b) => { P.sex = b.dataset.v; s.refresh(); },
+        'pf-act': (b) => { P.activity = b.dataset.v; s.refresh(); },
+        'pf-save': () => {
+          const age = parseNum(P.age), height = parseNum(P.height), w = parseNum(weight);
+          if (!age || age < 12 || age > 100) { toast('Escribe una edad válida'); return; }
+          if (!height || height < 120 || height > 230) { toast('Escribe tu altura en cm (120–230)'); return; }
+          if (!w || fromDisp(w) < 30 || fromDisp(w) > 300) { toast('Escribe tu peso'); return; }
+          db.profile = { ...P, age: Math.round(age), height: Math.round(height) };
+          const kg = fromDisp(w);
+          if (w0 == null || Math.abs(kg - w0) > 0.05) addMeasure({ weight: kg });
+          save(); s.close(); render(); toast('Perfil guardado ✅');
+          if (after) after();
+        }
+      }
+    });
+  }
+
+  function addMeasure(vals) {
+    db.body = db.body || [];
+    const today = new Date(); today.setHours(12, 0, 0, 0);
+    const e = db.body.find((x) => sameDay(x.date, today.getTime()));
+    if (e) Object.assign(e, vals); else db.body.push({ id: uid(), date: today.getTime(), ...vals });
+  }
+
+  function measureSheet(id) {
+    db.body = db.body || [];
+    const orig = id ? db.body.find((e) => e.id === id) : null;
+    const d = orig ? { ...orig } : { date: Date.now() };
+    const L = latest();
+    const toISO = (ts) => { const x = new Date(ts); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+    const s = openSheet({
+      title: orig ? 'Editar medición' : 'Registrar medidas',
+      full: true,
+      body: () => `
+        <label class="field"><span>Fecha</span><input class="input" type="date" data-ms="date" value="${toISO(d.date)}"></label>
+        <p class="muted small" style="margin-top:-4px">Rellena solo lo que midas. Con cuello, cintura${db.profile && db.profile.sex === 'm' ? ' y cadera' : ''} calculamos tu % de grasa.</p>
+        ${MEASURES.map((m) => {
+          const v = d[m.k] != null ? (m.k === 'weight' ? toDisp(d[m.k]) : d[m.k]) : '';
+          const ph = L[m.k] != null ? fmt1(m.k === 'weight' ? toDisp(L[m.k]) : L[m.k]) : '';
+          return `<label class="measure-row"><span><b>${m.n}</b><small>${m.help}</small></span>
+            <span class="mr-in"><input class="input" inputmode="decimal" data-ms="${m.k}" value="${v === '' ? '' : fmtN(v)}" placeholder="${ph}"><i>${m.k === 'weight' ? unit() : m.u}</i></span></label>`;
+        }).join('')}
+        ${orig ? `<button class="btn danger block" data-action="ms-del" style="margin-top:12px">${ICON.trash} Eliminar medición</button>` : ''}`,
+      foot: () => `<button class="btn primary block" data-action="ms-save">Guardar</button>`,
+      onInput(t) {
+        const k = t.dataset.ms; if (!k) return;
+        if (k === 'date') { const [y, mo, da] = t.value.split('-').map(Number); if (y) d.date = new Date(y, mo - 1, da, 12).getTime(); return; }
+        const v = parseNum(t.value);
+        d[k] = v == null ? null : k === 'weight' ? fromDisp(v) : v;
+      },
+      actions: {
+        'ms-save': () => {
+          const has = MEASURES.some((m) => d[m.k] != null);
+          if (!has) { toast('Escribe al menos una medida'); return; }
+          if (orig) Object.assign(orig, d);
+          else {
+            const same = db.body.find((x) => sameDay(x.date, d.date));
+            if (same) MEASURES.forEach((m) => { if (d[m.k] != null) same[m.k] = d[m.k]; });
+            else db.body.push({ id: uid(), ...d });
+          }
+          save(); s.close(); render(); toast('Medidas guardadas ✅');
+        },
+        'ms-del': () => ask('¿Eliminar medición?', 'Se borrará este registro.', 'Eliminar', true).then((ok) => {
+          if (!ok) return;
+          db.body = db.body.filter((e) => e.id !== id); save(); s.close(); render();
+        })
+      }
+    });
+  }
+
+  /* ================= NUTRICIÓN ================= */
+  const MEALS = window.GB_MEALS || [];
+  const mealKcal = (m) => 4 * m.p + 4 * m.c + 9 * m.f;
+  const SLOT_SPLIT = {
+    3: [['desayuno', 0.3], ['almuerzo', 0.4], ['cena', 0.3]],
+    4: [['desayuno', 0.25], ['almuerzo', 0.35], ['snack', 0.15], ['cena', 0.25]],
+    5: [['desayuno', 0.22], ['snack', 0.12], ['almuerzo', 0.32], ['snack', 0.12], ['cena', 0.22]]
+  };
+  const SLOT_NAME = { desayuno: 'Desayuno', almuerzo: 'Almuerzo', cena: 'Cena', snack: 'Merienda' };
+
+  function nutritionTargets() {
+    const I = indices();
+    if (!I || I.noWeight) return null;
+    const goal = db.profile.goal || 'mantener';
+    let kcal = goal === 'deficit' ? I.tdee * 0.8 : goal === 'volumen' ? I.tdee * 1.1 : I.tdee;
+    const floor = I.male ? 1500 : 1200;
+    if (goal === 'deficit') kcal = Math.max(kcal, floor, I.bmr * 1.0);
+    kcal = Math.round(kcal / 10) * 10;
+    // peso de referencia para la proteína (si hay mucho sobrepeso, se usa el peso "saludable" alto)
+    const refW = I.bmi > 30 ? I.healthy[1] * 1.1 : I.w;
+    const pPerKg = goal === 'deficit' ? 2.2 : goal === 'volumen' ? 2.0 : 1.8;
+    const p = Math.round(refW * pPerKg);
+    const f = Math.round(Math.max(I.w * 0.7, (kcal * 0.25) / 9));
+    const c = Math.max(50, Math.round((kcal - p * 4 - f * 9) / 4));
+    const weekly = goal === 'deficit' ? -(I.tdee - kcal) * 7 / 7700 : goal === 'volumen' ? (kcal - I.tdee) * 7 / 7700 : 0;
+    return { kcal, p, c, f, tdee: I.tdee, goal, weekly, water: I.water };
+  }
+
+  function mealPool(type, goal, veg) {
+    let list = MEALS.filter((m) => m.t.includes(type) && (!veg || m.veg) && (!m.onlyGoal || m.onlyGoal === goal));
+    if (goal === 'deficit') list = list.slice().sort((a, b) => b.p / mealKcal(b) - a.p / mealKcal(a)).slice(0, Math.max(3, Math.ceil(list.length * 0.7)));
+    if (goal === 'volumen') list = list.slice().sort((a, b) => mealKcal(b) - mealKcal(a)).slice(0, Math.max(3, Math.ceil(list.length * 0.7)));
+    return list;
+  }
+
+  function dayPlan(T) {
+    const P = db.profile;
+    const todayKey = new Date().toDateString();
+    if (!db.mealPlan || db.mealPlan.day !== todayKey) db.mealPlan = { day: todayKey, shift: Math.floor(Math.random() * 1000), swaps: {} };
+    const MP = db.mealPlan;
+    const slots = SLOT_SPLIT[P.meals] || SLOT_SPLIT[4];
+    const used = new Set();
+    return slots.map(([type, share], i) => {
+      const pool = mealPool(type, T.goal, P.diet === 'veg');
+      let k = MP.shift + i * 7 + (MP.swaps[i] || 0), meal = null;
+      for (let tries = 0; tries < pool.length; tries++) {
+        const m = pool[(k + tries) % pool.length];
+        if (!used.has(m.id)) { meal = m; break; }
+      }
+      meal = meal || pool[k % pool.length];
+      used.add(meal.id);
+      const target = T.kcal * share;
+      const factor = Math.min(2, Math.max(0.5, Math.round((target / mealKcal(meal)) * 4) / 4));
+      return { slot: i, type, meal, factor, target };
+    });
+  }
+
+  const fmtQty = (q, unitTxt, factor) => {
+    let v = q * factor;
+    if (unitTxt === 'g' || unitTxt === 'ml') v = Math.round(v / 5) * 5;
+    else v = v >= 1.75 ? Math.round(v) : Math.max(0.5, Math.round(v * 2) / 2);
+    const whole = Math.floor(v), half = v - whole >= 0.5;
+    const shown = half ? (whole ? `${whole}½` : '½') : String(whole);
+    return unitTxt === 'ud' ? `${shown} ` : `${shown} ${unitTxt} `;
+  };
+
+  function renderNutrition() {
+    if (!profileReady() || !latest().weight) return profileCta('Necesitamos tu sexo, edad, altura, peso y actividad para calcular tus calorías y proponerte comidas.');
+    const P = db.profile;
+    const T = nutritionTargets();
+    const goalInfo = NUTRI_GOALS.find((g) => g.id === T.goal);
+    const plan = dayPlan(T);
+    const tot = plan.reduce((a, x) => ({ k: a.k + mealKcal(x.meal) * x.factor, p: a.p + x.meal.p * x.factor, c: a.c + x.meal.c * x.factor, f: a.f + x.meal.f * x.factor }), { k: 0, p: 0, c: 0, f: 0 });
+    const bar = (label, g, kc, color) => {
+      const pct = Math.round((kc / T.kcal) * 100);
+      return `<div class="macro"><div class="row between"><span>${label}</span><b>${g} g</b></div><div class="mbar"><i style="width:${pct}%;background:${color}"></i></div><small>${fmtN(Math.round(kc))} kcal · ${pct}%</small></div>`;
+    };
+    let html = `
+      <div class="goal-seg">${NUTRI_GOALS.map((g) => `<button class="${T.goal === g.id ? 'on' : ''}" data-action="nu-goal" data-v="${g.id}"><span>${g.i}</span><b>${g.n}</b><small>${g.s}</small></button>`).join('')}</div>
+      <section class="hero kcal-hero">
+        <div class="kicker">Tu objetivo diario · ${esc(goalInfo.n.toLowerCase())}</div>
+        <h2>${fmtN(T.kcal)} <small>kcal</small></h2>
+        <p class="muted small" style="margin:-8px 0 12px">Gasto estimado ${fmtN(Math.round(T.tdee))} kcal · ${T.goal === 'mantener' ? 'mantienes tu peso' : `${T.weekly > 0 ? '+' : ''}${fmtN(round(toDisp(T.weekly), 2))} ${unit()}/semana aprox.`}</p>
+        ${bar('Proteína', T.p, T.p * 4, '#c6ff3d')}
+        ${bar('Carbohidratos', T.c, T.c * 4, '#5db8ff')}
+        ${bar('Grasas', T.f, T.f * 9, '#ffb04d')}
+        <div class="row between small muted" style="margin-top:10px"><span>💧 Agua: ${fmt1(T.water)} L/día</span><button class="tag" data-action="edit-profile">Editar perfil</button></div>
+      </section>
+      <div class="section-title">Comidas de hoy <button class="tag accent" data-action="nu-shuffle">🔄 Otra propuesta</button></div>
+      <div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <div class="seg small-seg">${[3, 4, 5].map((n) => `<button class="${(P.meals || 4) === n ? 'on' : ''}" data-action="nu-meals" data-v="${n}">${n} comidas</button>`).join('')}</div>
+        <div class="seg small-seg">${[['omni', 'Omnívora'], ['veg', 'Vegetariana']].map(([v, l]) => `<button class="${(P.diet || 'omni') === v ? 'on' : ''}" data-action="nu-diet" data-v="${v}">${l}</button>`).join('')}</div>
+      </div>
+      ${plan.map((x) => `
+        <div class="meal-card">
+          <div class="row between"><span class="meal-type">${SLOT_NAME[x.type]}</span><button class="icon-btn sm" data-action="nu-swap" data-v="${x.slot}" aria-label="Cambiar esta comida">🔄</button></div>
+          <h3>${esc(x.meal.n)}</h3>
+          <div class="meal-macros"><b>${fmtN(Math.round(mealKcal(x.meal) * x.factor))} kcal</b><span>P ${Math.round(x.meal.p * x.factor)} g</span><span>C ${Math.round(x.meal.c * x.factor)} g</span><span>G ${Math.round(x.meal.f * x.factor)} g</span>${x.factor !== 1 ? `<span class="tag">ración ×${String(x.factor).replace('.', ',')}</span>` : ''}</div>
+          <ul class="ing">${x.meal.ing.map(([q, u, n]) => `<li>${q == null ? '' : `<b>${fmtQty(q, u, x.factor)}</b>`}${esc(n)}${q == null ? ' (al gusto)' : ''}</li>`).join('')}</ul>
+        </div>`).join('')}
+      <div class="card totals">
+        <div class="row between"><b>Total del día</b><b>${fmtN(Math.round(tot.k))} / ${fmtN(T.kcal)} kcal</b></div>
+        <div class="row between small muted" style="margin-top:4px"><span>Proteína ${Math.round(tot.p)} / ${T.p} g</span><span>Carbos ${Math.round(tot.c)} / ${T.c} g</span><span>Grasa ${Math.round(tot.f)} / ${T.f} g</span></div>
+      </div>
+      <div class="section-title">Consejos para ${esc(goalInfo.n.toLowerCase())}</div>
+      <ul class="tips">${nutriTips(T.goal).map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
+      <p class="muted small" style="margin-top:14px">Cálculos orientativos (fórmula Mifflin-St Jeor). Si tienes alguna condición médica, estás embarazada o eres menor de edad, consulta a un profesional de la nutrición.</p>`;
+    return html;
+  }
+
+  function nutriTips(goal) {
+    const common = ['Llega a tu proteína diaria: es lo más importante para cuidar tu músculo.', 'Pésate 3–4 mañanas por semana y fíjate en la media semanal, no en un día suelto.'];
+    if (goal === 'deficit') return ['Prioriza verduras, proteína magra y alimentos poco procesados: sacian más con menos calorías.', 'Mantén el entrenamiento de fuerza: así pierdes grasa y no músculo.', 'Si te estancas 2–3 semanas, baja 100–150 kcal o camina más.', ...common];
+    if (goal === 'volumen') return ['Busca subir 0,25–0,5 % de tu peso por semana: más rápido suele ser grasa.', 'Si te cuesta comer tanto, usa batidos, frutos secos y aceite de oliva.', 'Progresa en tus pesos cada semana: el superávit solo sirve si entrenas fuerte.', ...common];
+    return ['Mantén el peso estable mientras ganas fuerza: es la recomposición corporal.', 'Reparte la proteína en 3–5 comidas a lo largo del día.', ...common];
+  }
+
   /* ================= AJUSTES ================= */
+  function styleChooserHtml() {
+    const cur = imgStyle();
+    const ex = exById('press-banca');
+    return `<div class="style-pick">
+      <button class="sp ${cur === 'foto' ? 'on' : ''}" data-action="img-style" data-v="foto">
+        <img src="img/foto/${ex.id}-t.webp" alt="" loading="lazy"><b>Versión 1</b><small>Fotos reales</small>
+      </button>
+      <button class="sp ${cur === '3d' ? 'on' : ''}" data-action="img-style" data-v="3d">
+        <img src="img/ex/${ex.id}-t.webp" alt="" loading="lazy"><b>Versión 2</b><small>Animación 3D</small>
+      </button>
+    </div>`;
+  }
+  function setImgStyle(v) {
+    db.settings.imgStyle = v;
+    save(); render();
+    toast(v === 'foto' ? 'Usando la versión 1: fotos reales 📷' : 'Usando la versión 2: animaciones 3D 🧍');
+  }
+  function firstRunChooser() {
+    if (db.settings.imgStyle || sheets.length) return;
+    const s = openSheet({
+      title: '¿Qué versión prefieres?',
+      body: () => `<p class="muted" style="margin:0 2px 12px">Elige cómo quieres ver los ejercicios. Puedes cambiarlo cuando quieras en Ajustes ⚙️.</p>${styleChooserHtml()}`,
+      foot: () => `<button class="btn primary block" data-action="close-sheet">Listo</button>`,
+      actions: { 'img-style': (b) => { setImgStyle(b.dataset.v); s.refresh(); } },
+      onClose: () => { if (!db.settings.imgStyle) { db.settings.imgStyle = 'foto'; save(); render(); } }
+    });
+  }
+
   function openSettings() {
     const s = openSheet({
       title: 'Ajustes',
       body: () => `
+        <div class="section-title" style="margin-top:4px">Versión de imágenes</div>
+        ${styleChooserHtml()}
+        <div class="set-group" style="margin-top:12px">
+          <button class="set-line" data-action="edit-profile"><span>👤 Mi perfil <span class="muted small">${profileReady() ? `${sexName(db.profile.sex)} · ${db.profile.age} años · ${db.profile.height} cm` : 'sin completar'}</span></span>${ICON.chev}</button>
+        </div>
         <div class="set-group">
           <div class="set-line"><span>Unidad de peso</span>
             <div class="seg">${['kg', 'lb'].map((u) => `<button class="${db.settings.unit === u ? 'on' : ''}" data-action="set-unit" data-v="${u}">${u}</button>`).join('')}</div>
@@ -1506,6 +1972,7 @@
       },
       actions: {
         'set-unit': (b) => { db.settings.unit = b.dataset.v; save(); s.refresh(); render(); },
+        'img-style': (b) => { setImgStyle(b.dataset.v); s.refresh(); },
         'set-toggle': (b) => { const k = b.dataset.k; db.settings[k] = !db.settings[k]; save(); s.refresh(); if (k === 'sound' && db.settings.sound) { unlockAudio(); beep(); } },
         'export': exportData,
         'cache-images': () => cacheImages(s.el.querySelector('#img-progress')),
@@ -1545,7 +2012,7 @@
       return;
     }
     caching = true;
-    const urls = BASE_EX.filter((e) => e.img).flatMap((e) => [imgSrc(e, 't'), animSrc(e)]);
+    const urls = BASE_EX.filter((e) => e.img).flatMap((e) => (usePhoto(e) ? [imgSrc(e, 't'), imgSrc(e, 0), imgSrc(e, 1)] : [imgSrc(e, 't'), animSrc(e)]));
     let done = 0, failed = 0;
     const next = async () => {
       while (urls.length) {
@@ -1723,6 +2190,16 @@
     'lib-mode': (b) => { ui.libMode = b.dataset.v; render(); },
     'muscle-poster': (b) => musclePoster(b.dataset.v),
     'hist-mode': (b) => { ui.histMode = b.dataset.v; render(); },
+    'edit-profile': () => editProfile(),
+    'add-measure': () => measureSheet(null),
+    'edit-measure': (b) => measureSheet(b.dataset.id),
+    'body-metric': (b) => { ui.bodyMetric = b.dataset.v; render(); },
+    'nu-goal': (b) => { db.profile.goal = b.dataset.v; save(); render(); },
+    'nu-meals': (b) => { db.profile.meals = +b.dataset.v; save(); render(); },
+    'nu-diet': (b) => { db.profile.diet = b.dataset.v; save(); render(); },
+    'nu-shuffle': () => { db.mealPlan.shift += 3; db.mealPlan.swaps = {}; save(); render(); },
+    'nu-swap': (b) => { const k = +b.dataset.v; db.mealPlan.swaps[k] = (db.mealPlan.swaps[k] || 0) + 1; save(); render(); },
+    'go-nutrition': () => setTab('nutrition'),
     'session-detail': (b) => sessionDetail(b.dataset.id),
     'ex-progress': (b) => exProgress(b.dataset.id)
   };
@@ -1790,6 +2267,7 @@
   /* ================= Inicio ================= */
   render();
   checkStale();
+  firstRunChooser();
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     const hadController = !!navigator.serviceWorker.controller;

@@ -652,14 +652,14 @@ window.GB_EXERCISES = [
     t: ['El movimiento es corto: no fuerces la zona lumbar.']
   },
   {
-    id: 'abduccion-lateral', n: 'Elevación lateral de pierna tumbado', m: 'gluteos', p: ['casa', 'gym'], q: [], e: 'Peso corporal', img: true,
+    id: 'abduccion-lateral', n: 'Abducción de cadera de pie', m: 'gluteos', p: ['casa', 'gym'], q: [], e: 'Peso corporal (silla para apoyarte)', img: true,
     mu: 'Glúteo medio y abductores',
     d: 'Trabaja el lateral del glúteo sin material.',
-    s: ['Túmbate de lado con las piernas estiradas y la cabeza apoyada en el brazo.',
-        'Eleva la pierna de arriba sin girar la cadera, con la punta del pie mirando al frente.',
-        'Sube hasta unos 45° y aguanta un segundo.',
-        'Baja despacio. Completa todas y cambia de lado.'],
-    t: ['Si la punta del pie mira al techo, trabaja otro músculo: mantenla al frente.']
+    s: ['De pie, apóyate con una mano en una silla o pared.',
+        'Con la pierna estirada, elévala hacia el lado sin inclinar el torso.',
+        'Sube hasta unos 30–45° y aguanta un segundo.',
+        'Baja despacio. Completa todas y cambia de pierna.'],
+    t: ['La punta del pie mira al frente, no al techo.', 'Añade una mini banda en los tobillos para más dificultad.']
   },
   {
     id: 'extension-cadera-banda', n: 'Extensión de cadera con banda', m: 'gluteos', p: ['casa', 'gym'], q: ['banda'], e: 'Banda elástica', img: true,

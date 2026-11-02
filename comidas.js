@@ -1,0 +1,97 @@
+/* GYMBRO — base de comidas para las propuestas de nutrición.
+ * t:   tipo de comida: 'desayuno', 'almuerzo', 'cena', 'snack' (puede tener varios)
+ * veg: true si es vegetariana (ovo-lacto: sin carne ni pescado)
+ * p, c, f: proteína, carbohidratos y grasa (g) por 1 ración. Las kcal se calculan (4·p + 4·c + 9·f).
+ * onlyGoal: si se indica, solo se propone para ese objetivo ('deficit', 'mantener', 'volumen')
+ * ing: ingredientes para 1 ración: [cantidad, unidad, nombre]. Cantidad null = al gusto.
+ * Valores aproximados de referencia.
+ */
+window.GB_MEALS = [
+  /* ---------- DESAYUNOS ---------- */
+  { id: 'avena-platano', n: 'Avena con plátano y crema de cacahuate', t: ['desayuno'], veg: true, p: 22, c: 85, f: 14,
+    ing: [[60, 'g', 'copos de avena'], [250, 'ml', 'leche desnatada o bebida vegetal'], [1, 'ud', 'plátano'], [15, 'g', 'crema de cacahuate'], [null, '', 'canela']] },
+  { id: 'huevos-aguacate', n: 'Huevos revueltos con pan integral y aguacate', t: ['desayuno'], veg: true, p: 26, c: 30, f: 24,
+    ing: [[3, 'ud', 'huevos'], [2, 'rebanadas', 'pan integral'], [50, 'g', 'aguacate'], [null, '', 'tomate y sal']] },
+  { id: 'yogur-granola', n: 'Yogur griego con frutos rojos y granola', t: ['desayuno', 'snack'], veg: true, p: 27, c: 40, f: 5,
+    ing: [[250, 'g', 'yogur griego 0 %'], [100, 'g', 'frutos rojos'], [30, 'g', 'granola']] },
+  { id: 'tortilla-claras', n: 'Tortilla de claras con espinaca y tostada', t: ['desayuno', 'cena'], veg: true, p: 32, c: 18, f: 7,
+    ing: [[6, 'ud', 'claras de huevo'], [1, 'ud', 'huevo entero'], [60, 'g', 'espinaca'], [1, 'rebanada', 'pan integral']] },
+  { id: 'batido-avena', n: 'Batido de proteína con avena y fruta', t: ['desayuno'], veg: true, p: 38, c: 70, f: 8,
+    ing: [[30, 'g', 'proteína en polvo (whey)'], [40, 'g', 'copos de avena'], [1, 'ud', 'plátano'], [250, 'ml', 'leche desnatada']] },
+  { id: 'arepa-huevo', n: 'Arepa con huevo y queso blanco', t: ['desayuno'], veg: true, p: 24, c: 45, f: 18,
+    ing: [[80, 'g', 'harina de maíz precocida'], [2, 'ud', 'huevos'], [30, 'g', 'queso blanco fresco']] },
+  { id: 'tostadas-pavo', n: 'Tostadas integrales con pavo y queso fresco', t: ['desayuno', 'snack'], veg: false, p: 30, c: 32, f: 8,
+    ing: [[2, 'rebanadas', 'pan integral'], [80, 'g', 'pechuga de pavo'], [60, 'g', 'queso fresco batido o light'], [null, '', 'tomate']] },
+  { id: 'pancakes-avena', n: 'Pancakes de avena, huevo y plátano', t: ['desayuno'], veg: true, p: 20, c: 70, f: 11,
+    ing: [[50, 'g', 'copos de avena'], [2, 'ud', 'huevos'], [1, 'ud', 'plátano'], [10, 'g', 'miel']] },
+  { id: 'cottage-pina', n: 'Requesón (cottage) con piña y nueces', t: ['desayuno', 'snack'], veg: true, p: 26, c: 22, f: 14,
+    ing: [[200, 'g', 'requesón / queso cottage'], [120, 'g', 'piña'], [15, 'g', 'nueces']] },
+  { id: 'sandwich-jamon', n: 'Sándwich integral de jamón y queso', t: ['desayuno', 'snack'], veg: false, p: 24, c: 32, f: 12,
+    ing: [[2, 'rebanadas', 'pan integral'], [60, 'g', 'jamón cocido magro'], [30, 'g', 'queso en lonchas']] },
+
+  /* ---------- ALMUERZOS ---------- */
+  { id: 'pollo-arroz', n: 'Pollo a la plancha con arroz y brócoli', t: ['almuerzo', 'cena'], veg: false, p: 50, c: 50, f: 12,
+    ing: [[150, 'g', 'pechuga de pollo'], [150, 'g', 'arroz cocido'], [150, 'g', 'brócoli'], [10, 'ml', 'aceite de oliva']] },
+  { id: 'salmon-papa', n: 'Salmón al horno con papa y ensalada', t: ['almuerzo', 'cena'], veg: false, p: 36, c: 40, f: 22,
+    ing: [[150, 'g', 'salmón'], [200, 'g', 'papa'], [null, '', 'ensalada verde'], [5, 'ml', 'aceite de oliva']] },
+  { id: 'ternera-quinoa', n: 'Ternera magra salteada con quinoa y verduras', t: ['almuerzo'], veg: false, p: 42, c: 38, f: 14,
+    ing: [[150, 'g', 'ternera magra'], [150, 'g', 'quinoa cocida'], [150, 'g', 'pimiento, cebolla y calabacín'], [5, 'ml', 'aceite']] },
+  { id: 'bowl-atun', n: 'Bowl de atún, arroz integral y aguacate', t: ['almuerzo'], veg: false, p: 36, c: 45, f: 14,
+    ing: [[120, 'g', 'atún al natural'], [150, 'g', 'arroz integral cocido'], [50, 'g', 'aguacate'], [null, '', 'pepino y tomate']] },
+  { id: 'pasta-bolonesa', n: 'Pasta integral con carne magra y tomate', t: ['almuerzo'], veg: false, p: 42, c: 72, f: 14,
+    ing: [[90, 'g', 'pasta integral (en seco)'], [120, 'g', 'carne picada 5 % grasa'], [150, 'g', 'tomate triturado'], [10, 'g', 'queso parmesano']] },
+  { id: 'lentejas', n: 'Lentejas guisadas con verduras y arroz', t: ['almuerzo'], veg: true, p: 24, c: 80, f: 6,
+    ing: [[250, 'g', 'lentejas cocidas'], [100, 'g', 'arroz cocido'], [150, 'g', 'zanahoria, cebolla y pimiento']] },
+  { id: 'pavo-camote', n: 'Pavo con camote y judías verdes', t: ['almuerzo', 'cena'], veg: false, p: 42, c: 45, f: 6,
+    ing: [[150, 'g', 'pechuga de pavo'], [200, 'g', 'camote / boniato'], [150, 'g', 'judías verdes']] },
+  { id: 'burrito-bowl', n: 'Burrito bowl de pollo y frijoles', t: ['almuerzo'], veg: false, p: 45, c: 60, f: 12,
+    ing: [[130, 'g', 'pollo'], [100, 'g', 'frijoles negros cocidos'], [100, 'g', 'arroz cocido'], [null, '', 'pico de gallo'], [20, 'g', 'queso rallado']] },
+  { id: 'tofu-fideos', n: 'Tofu salteado con fideos de arroz y verduras', t: ['almuerzo'], veg: true, p: 26, c: 62, f: 14,
+    ing: [[180, 'g', 'tofu firme'], [70, 'g', 'fideos de arroz (en seco)'], [150, 'g', 'verduras salteadas'], [null, '', 'salsa de soya']] },
+  { id: 'garbanzos-espinaca', n: 'Garbanzos con espinaca y huevo', t: ['almuerzo', 'cena'], veg: true, p: 28, c: 45, f: 16,
+    ing: [[200, 'g', 'garbanzos cocidos'], [100, 'g', 'espinaca'], [2, 'ud', 'huevos']] },
+  { id: 'merluza-arroz', n: 'Merluza con arroz y ensalada', t: ['almuerzo', 'cena'], veg: false, p: 38, c: 45, f: 10,
+    ing: [[180, 'g', 'merluza u otro pescado blanco'], [150, 'g', 'arroz cocido'], [null, '', 'ensalada'], [5, 'ml', 'aceite de oliva']] },
+
+  /* ---------- CENAS ---------- */
+  { id: 'ensalada-pollo', n: 'Ensalada completa de pollo', t: ['cena', 'almuerzo'], veg: false, p: 40, c: 15, f: 15,
+    ing: [[130, 'g', 'pollo a la plancha'], [1, 'ud', 'huevo cocido'], [50, 'g', 'maíz'], [null, '', 'lechuga y tomate'], [5, 'ml', 'aceite de oliva']] },
+  { id: 'tortilla-verduras', n: 'Tortilla de verduras con ensalada', t: ['cena'], veg: true, p: 28, c: 10, f: 16,
+    ing: [[3, 'ud', 'huevos'], [2, 'ud', 'claras'], [150, 'g', 'calabacín, cebolla y pimiento'], [null, '', 'ensalada']] },
+  { id: 'wrap-pavo', n: 'Wrap integral de pavo y hummus', t: ['cena', 'almuerzo'], veg: false, p: 32, c: 35, f: 12,
+    ing: [[1, 'ud', 'tortilla integral grande'], [100, 'g', 'pechuga de pavo'], [40, 'g', 'hummus'], [null, '', 'lechuga, tomate y zanahoria']] },
+  { id: 'pescado-horno', n: 'Pescado blanco con verduras al horno', t: ['cena'], veg: false, p: 40, c: 18, f: 9,
+    ing: [[200, 'g', 'pescado blanco'], [250, 'g', 'verduras variadas'], [5, 'ml', 'aceite de oliva']] },
+  { id: 'crema-pollo', n: 'Crema de verduras con pechuga de pollo', t: ['cena'], veg: false, p: 33, c: 20, f: 8,
+    ing: [[300, 'ml', 'crema de verduras ligera'], [120, 'g', 'pechuga de pollo']] },
+  { id: 'hamburguesa', n: 'Hamburguesa casera de ternera con ensalada', t: ['cena', 'almuerzo'], veg: false, p: 38, c: 30, f: 14,
+    ing: [[150, 'g', 'carne picada 5 % grasa'], [1, 'ud', 'pan integral de hamburguesa'], [null, '', 'lechuga, tomate y cebolla']] },
+  { id: 'tofu-arroz', n: 'Salteado de tofu y verduras con arroz', t: ['cena'], veg: true, p: 22, c: 40, f: 12,
+    ing: [[150, 'g', 'tofu firme'], [200, 'g', 'verduras'], [100, 'g', 'arroz cocido']] },
+  { id: 'huevos-papa', n: 'Huevos con papa al horno y pimientos', t: ['cena'], veg: true, p: 16, c: 40, f: 12,
+    ing: [[2, 'ud', 'huevos'], [200, 'g', 'papa al horno'], [100, 'g', 'pimientos']] },
+  { id: 'pizza-pollo', n: 'Pizza integral casera de pollo', t: ['cena'], veg: false, p: 42, c: 55, f: 14,
+    ing: [[1, 'ud', 'base de pizza integral pequeña'], [100, 'g', 'pollo'], [40, 'g', 'queso light'], [null, '', 'tomate y verduras']] },
+  { id: 'quinoa-feta', n: 'Bowl de quinoa, garbanzos y queso feta', t: ['cena', 'almuerzo'], veg: true, p: 22, c: 50, f: 13,
+    ing: [[120, 'g', 'quinoa cocida'], [100, 'g', 'garbanzos cocidos'], [40, 'g', 'queso feta'], [null, '', 'pepino, tomate y cebolla']] },
+
+  /* ---------- SNACKS ---------- */
+  { id: 'yogur-miel', n: 'Yogur griego con miel', t: ['snack'], veg: true, p: 17, c: 14, f: 0,
+    ing: [[170, 'g', 'yogur griego 0 %'], [10, 'g', 'miel']] },
+  { id: 'fruta-almendras', n: 'Fruta y puñado de almendras', t: ['snack'], veg: true, p: 4, c: 25, f: 10,
+    ing: [[1, 'ud', 'manzana o pera'], [20, 'g', 'almendras']] },
+  { id: 'batido-whey', n: 'Batido de proteína', t: ['snack'], veg: true, p: 25, c: 6, f: 2,
+    ing: [[30, 'g', 'proteína en polvo (whey)'], [300, 'ml', 'agua o leche desnatada']] },
+  { id: 'tostada-cacahuate', n: 'Tostada con crema de cacahuate y plátano', t: ['snack', 'desayuno'], veg: true, p: 7, c: 30, f: 9,
+    ing: [[1, 'rebanada', 'pan integral'], [15, 'g', 'crema de cacahuate'], [0.5, 'ud', 'plátano']] },
+  { id: 'atun-galletas', n: 'Atún con galletas de arroz', t: ['snack'], veg: false, p: 26, c: 22, f: 2,
+    ing: [[120, 'g', 'atún al natural'], [3, 'ud', 'galletas de arroz']] },
+  { id: 'huevos-fruta', n: 'Huevos duros y fruta', t: ['snack'], veg: true, p: 13, c: 15, f: 10,
+    ing: [[2, 'ud', 'huevos duros'], [1, 'ud', 'fruta de temporada']] },
+  { id: 'hummus-verdura', n: 'Hummus con bastones de verdura', t: ['snack'], veg: true, p: 6, c: 18, f: 9,
+    ing: [[60, 'g', 'hummus'], [null, '', 'zanahoria, pepino y apio']] },
+  { id: 'barrita-avena', n: 'Barrita casera de avena y frutos secos', t: ['snack'], veg: true, p: 8, c: 30, f: 10,
+    ing: [[1, 'ud', 'barrita casera (avena, dátil y nueces)']] },
+  { id: 'batido-volumen', n: 'Batido para ganar masa', t: ['snack', 'desayuno'], veg: true, onlyGoal: 'volumen', p: 40, c: 75, f: 22,
+    ing: [[300, 'ml', 'leche entera'], [1, 'ud', 'plátano'], [40, 'g', 'copos de avena'], [20, 'g', 'crema de cacahuate'], [30, 'g', 'proteína en polvo']] }
+];
