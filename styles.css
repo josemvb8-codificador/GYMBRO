@@ -238,7 +238,19 @@ select.input {
   padding: 14px 16px; margin-bottom: 12px;
 }
 .wk-head h2 { margin: 0; font-size: 18px; }
-.wk-clock { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); letter-spacing: -0.02em; }
+.wk-clock {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none;
+  padding: 6px 10px; margin: -6px -8px -6px 0; border-radius: 14px;
+  font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); letter-spacing: -0.02em; line-height: 1.1;
+}
+.wk-clock:active { background: var(--surface-2); }
+.wk-clock small { font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--muted); }
+.wk-clock.paused { color: #ffb04d; }
+.wk-clock.paused small { color: #ffb04d; }
+.pause-banner {
+  display: block; width: 100%; margin: -4px 0 12px; padding: 14px 16px; border-radius: 16px; text-align: center;
+  background: rgba(255,176,77,.12); border: 1px solid rgba(255,176,77,.35); color: #ffb04d; font-size: 15px;
+}
 .progress { height: 6px; border-radius: 6px; background: var(--surface-3); overflow: hidden; margin-top: 8px; }
 .progress i { display: block; height: 100%; background: var(--accent); border-radius: 6px; transition: width .3s ease; }
 

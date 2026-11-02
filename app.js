@@ -2,7 +2,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '2.0.0';
+  const VERSION = '2.0.1';
   const KEY = 'gymbro.v1';
   const MUSCLES = window.GB_MUSCLES;
   const BASE_EX = window.GB_EXERCISES;
@@ -130,6 +130,9 @@
     const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
     return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
   };
+  const activeMs = (a) => (a.pausedAt || Date.now()) - a.start - (a.pausedMs || 0);
+  const sesDur = (s) => s.end - s.start - (s.pausedMs || 0);
+  const STALE_MS = 3 * 3600 * 1000;
   const fmtDur = (ms) => {
     const min = Math.round(ms / 60000);
     return min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`;
@@ -392,8 +395,11 @@
           <div class="muted small">${done}/${total} series completadas</div>
           <div class="progress"><i style="width:${total ? (done / total) * 100 : 0}%"></i></div>
         </div>
-        <div class="wk-clock" id="wk-clock">0:00</div>
-      </section>`;
+        <button class="wk-clock ${a.pausedAt ? 'paused' : ''}" data-action="clock-menu" aria-label="Pausar, terminar o descartar el entrenamiento">
+          <span id="wk-clock">0:00</span><small>${a.pausedAt ? '⏸ En pausa' : 'Toca para pausar'}</small>
+        </button>
+      </section>
+      ${a.pausedAt ? `<button class="pause-banner" data-action="wk-resume">⏸ Entrenamiento en pausa · <b>Toca para reanudar</b></button>` : ''}`;
 
     if (!a.entries.length) {
       html += `<div class="card empty"><div class="big">➕</div><h3>Añade ejercicios</h3><p>Elige de la biblioteca lo que vas a entrenar hoy.</p></div>`;
@@ -456,12 +462,81 @@
     clearInterval(clockInt);
     const el = $('#wk-clock');
     if (!el || !db.active) return;
-    const tick = () => { el.textContent = fmtClock((Date.now() - db.active.start) / 1000); };
+    const tick = () => { el.textContent = fmtClock(activeMs(db.active) / 1000); };
     tick();
     clockInt = setInterval(() => { if (!document.body.contains(el) || !db.active) return clearInterval(clockInt); tick(); }, 1000);
   }
 
+  function pauseWorkout() {
+    const a = db.active;
+    if (!a || a.pausedAt) return;
+    a.pausedAt = Date.now();
+    db.timer = null;
+    save(); render(); toast('Entrenamiento en pausa ⏸');
+  }
+  function resumeWorkout(silent) {
+    const a = db.active;
+    if (!a || !a.pausedAt) return;
+    a.pausedMs = (a.pausedMs || 0) + (Date.now() - a.pausedAt);
+    delete a.pausedAt;
+    save(); render();
+    if (!silent) toast('¡Seguimos! ▶');
+  }
+  function discardWorkout() {
+    db.active = null; db.timer = null; save(); render(); toast('Entrenamiento descartado');
+  }
+
+  function clockMenu() {
+    const a = db.active;
+    if (!a) return;
+    const done = a.entries.reduce((n, e) => n + e.sets.filter((x) => x.done).length, 0);
+    const s = openSheet({
+      title: 'Entrenamiento',
+      body: () => `
+        <p class="muted" style="margin:0 2px 12px">Tiempo activo: <b style="color:var(--text)">${fmtClock(activeMs(a) / 1000)}</b> · ${done} series completadas</p>
+        <div class="set-group">
+          ${a.pausedAt
+            ? `<button class="set-line" data-action="cm-resume"><span>▶️ Reanudar</span>${ICON.chev}</button>`
+            : `<button class="set-line" data-action="cm-pause"><span>⏸ Pausar el reloj</span>${ICON.chev}</button>`}
+          <button class="set-line" data-action="cm-finish"><span>✅ Terminar y guardar</span>${ICON.chev}</button>
+          <button class="set-line" data-action="cm-discard" style="color:var(--danger)"><span>🗑️ Descartar entrenamiento</span>${ICON.chev}</button>
+        </div>`,
+      foot: () => `<button class="btn block" data-action="close-sheet">Seguir entrenando</button>`,
+      actions: {
+        'cm-pause': () => { s.close(); pauseWorkout(); },
+        'cm-resume': () => { s.close(); resumeWorkout(); },
+        'cm-finish': () => { s.close(); finishWorkout(); },
+        'cm-discard': () => { s.close(); ask('¿Descartar entrenamiento?', 'No se guardará nada de esta sesión.', 'Descartar', true).then((ok) => { if (ok) discardWorkout(); }); }
+      }
+    });
+  }
+
+  // Si un entrenamiento lleva más de 3 horas abierto, preguntar si se olvidó
+  function checkStale() {
+    const a = db.active;
+    if (!a || a.pausedAt || sheets.length) return;
+    const ms = activeMs(a);
+    if (ms < STALE_MS || (a.staleAck && ms - a.staleAck < STALE_MS)) return;
+    const done = a.entries.reduce((n, e) => n + e.sets.filter((x) => x.done).length, 0);
+    const s = openSheet({
+      title: '¿Sigues entrenando?',
+      body: () => `
+        <div class="empty" style="padding:6px 0 10px"><div class="big">⏰</div>
+          <p>"${esc(a.name)}" lleva <b style="color:var(--text)">${fmtDur(ms)}</b> abierto${done ? ` con ${done} series completadas` : ' y no has marcado ninguna serie'}.</p></div>`,
+      foot: () => `
+        ${done ? '<button class="btn primary block" data-action="st-finish">Terminar y guardar</button>' : ''}
+        <button class="btn ${done ? '' : 'danger'} block" data-action="st-discard">Descartar entrenamiento</button>
+        <button class="btn ghost block" data-action="st-keep">Sigo entrenando</button>`,
+      actions: {
+        'st-finish': () => { s.close(); finishWorkout(); },
+        'st-discard': () => { s.close(); discardWorkout(); },
+        'st-keep': () => { a.staleAck = activeMs(a); save(); s.close(); }
+      }
+    });
+  }
+
   function toggleSet(ei, si) {
+    if (db.active.pausedAt) resumeWorkout(true);
     const e = db.active.entries[ei];
     const s = e.sets[si];
     if (s.done) { s.done = false; save(); render(); return; }
@@ -512,7 +587,9 @@
         if (had && maxW > 0 && maxW > prevBest) prs.push(`${exById(e.exId).n}: ${fmtN(toDisp(maxW))} ${unit()}`);
         else if (had && maxW === 0 && prevBest === 0 && maxR > prevReps) prs.push(`${exById(e.exId).n}: ${maxR} ${unitOf(exById(e.exId))}`);
       }
-      const session = { id: a.id, name: a.name, routineId: a.routineId, start: a.start, end: Date.now(), entries, prs };
+      const now = Date.now();
+      const pausedMs = (a.pausedMs || 0) + (a.pausedAt ? now - a.pausedAt : 0);
+      const session = { id: a.id, name: a.name, routineId: a.routineId, start: a.start, end: now, pausedMs, entries, prs };
       db.history.push(session);
       db.active = null;
       db.timer = null;
@@ -529,7 +606,7 @@
       body: () => `
         <div class="empty" style="padding:8px 0 16px"><div class="big">🏆</div><h3>${esc(s.name)}</h3><p class="muted cap">${esc(fmtDate(s.start, { weekday: 'long', day: 'numeric', month: 'long' }))}</p></div>
         <div class="kpis">
-          <div class="kpi"><b>${fmtDur(s.end - s.start)}</b><span>Duración</span></div>
+          <div class="kpi"><b>${fmtDur(sesDur(s))}</b><span>Duración</span></div>
           <div class="kpi"><b>${sets}</b><span>Series</span></div>
           <div class="kpi"><b>${fmtN(round(toDisp(vol), 0))}</b><span>Volumen (${unit()})</span></div>
         </div>
@@ -591,7 +668,11 @@
     tick();
     timerInt = setInterval(tick, 250);
   }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) renderTimer(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    renderTimer();
+    if (db.active) { updateClock(); checkStale(); }
+  });
 
   /* ================= RUTINAS ================= */
   function renderRoutines() {
@@ -1253,7 +1334,7 @@
           <button class="card tap hist-item" data-action="session-detail" data-id="${s.id}">
             <div class="row between"><span class="date">${esc(fmtDate(s.start))} · ${new Date(s.start).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}</span>${s.prs && s.prs.length ? `<span class="pr-badge">${s.prs.length} PR</span>` : ''}</div>
             <h3 class="ellipsis">${esc(s.name)}</h3>
-            <div class="nums"><span><b>${fmtDur(s.end - s.start)}</b></span><span><b>${sets}</b> series</span><span><b>${fmtN(round(toDisp(vol), 0))}</b> ${unit()}</span></div>
+            <div class="nums"><span><b>${fmtDur(sesDur(s))}</b></span><span><b>${sets}</b> series</span><span><b>${fmtN(round(toDisp(vol), 0))}</b> ${unit()}</span></div>
             <div class="muted small ellipsis" style="margin-top:6px">${esc(s.entries.map((e) => exById(e.exId).n).join(' · '))}</div>
           </button>`;
       }
@@ -1367,7 +1448,7 @@
       body: () => `
         <p class="muted cap" style="margin-top:0">${esc(fmtDate(ses.start, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</p>
         <div class="kpis" style="margin-bottom:16px">
-          <div class="kpi"><b>${fmtDur(ses.end - ses.start)}</b><span>Duración</span></div>
+          <div class="kpi"><b>${fmtDur(sesDur(ses))}</b><span>Duración</span></div>
           <div class="kpi"><b>${sets}</b><span>Series</span></div>
           <div class="kpi"><b>${fmtN(round(toDisp(vol), 0))}</b><span>Volumen (${unit()})</span></div>
         </div>
@@ -1628,8 +1709,10 @@
     'add-to-workout': () => openPicker((ids) => { ids.forEach((id) => db.active.entries.push(newEntry(id))); save(); render(); }),
     'finish-workout': finishWorkout,
     'cancel-workout': () => ask('¿Descartar entrenamiento?', 'No se guardará nada de esta sesión.', 'Descartar', true).then((ok) => {
-      if (ok) { db.active = null; db.timer = null; save(); render(); toast('Entrenamiento descartado'); }
+      if (ok) discardWorkout();
     }),
+    'clock-menu': clockMenu,
+    'wk-resume': () => resumeWorkout(),
     'manual-timer': () => startTimer(db.settings.rest),
     'timer-adj': (b) => adjustTimer(+b.dataset.d),
     'timer-skip': () => { finishedShownUntil = 0; stopTimer(); },
@@ -1706,6 +1789,7 @@
 
   /* ================= Inicio ================= */
   render();
+  checkStale();
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     const hadController = !!navigator.serviceWorker.controller;
