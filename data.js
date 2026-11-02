@@ -12,9 +12,10 @@
  * d:   resumen
  * s:   pasos para hacerlo
  * t:   consejos / errores comunes
- * img: true si tiene fotos (img/ex/<id>-0.webp, -1.webp y miniatura -t.webp)
+ * img: true si tiene animación (img/ex/<id>.webp) y miniatura (img/ex/<id>-t.webp)
  *
- * Fotos: Free Exercise DB (https://github.com/yuhonas/free-exercise-db), dominio público (Unlicense).
+ * Animaciones 3D: Open Exercise Figures (https://github.com/AbanoubAmir/open-exercise-figures), dominio público (CC0).
+ * Músculos trabajados por ejercicio: muscles.js
  */
 window.GB_MUSCLES = [
   { id: 'pecho', n: 'Pecho' },
@@ -404,6 +405,17 @@ window.GB_EXERCISES = [
     t: ['No dejes caer el peso abajo: protege el codo.']
   },
 
+  {
+    id: 'curl-banda', n: 'Curl con banda elástica', m: 'biceps', p: ['casa', 'gym'], q: ['banda'], e: 'Banda elástica', img: true,
+    mu: 'Bíceps y antebrazo',
+    d: 'Curl de bíceps en casa solo con una banda.',
+    s: ['Pisa la banda con los pies y sujeta los extremos con las palmas hacia delante.',
+        'Pega los codos a los costados.',
+        'Sube las manos hacia los hombros doblando los codos.',
+        'Baja despacio resistiendo la banda.'],
+    t: ['Pisa la banda más corta para que cueste más.']
+  },
+
   /* ============ TRÍCEPS ============ */
   {
     id: 'extension-polea', n: 'Extensión de tríceps en polea', m: 'triceps', p: ['gym'], e: 'Polea alta', img: true,
@@ -640,14 +652,24 @@ window.GB_EXERCISES = [
     t: ['El movimiento es corto: no fuerces la zona lumbar.']
   },
   {
-    id: 'patada-cuadrupedia', n: 'Patada de glúteo en cuadrupedia', m: 'gluteos', p: ['casa', 'gym'], q: [], e: 'Peso corporal', img: true,
-    mu: 'Glúteo mayor',
-    d: 'Clásico de casa para glúteos.',
-    s: ['Ponte a cuatro patas, manos bajo hombros y rodillas bajo cadera.',
-        'Eleva una pierna flexionada llevando la planta del pie hacia el techo.',
-        'Aprieta el glúteo arriba.',
-        'Baja sin apoyar la rodilla y repite.'],
-    t: ['Mantén el abdomen firme para no arquear la espalda.']
+    id: 'abduccion-lateral', n: 'Elevación lateral de pierna tumbado', m: 'gluteos', p: ['casa', 'gym'], q: [], e: 'Peso corporal', img: true,
+    mu: 'Glúteo medio y abductores',
+    d: 'Trabaja el lateral del glúteo sin material.',
+    s: ['Túmbate de lado con las piernas estiradas y la cabeza apoyada en el brazo.',
+        'Eleva la pierna de arriba sin girar la cadera, con la punta del pie mirando al frente.',
+        'Sube hasta unos 45° y aguanta un segundo.',
+        'Baja despacio. Completa todas y cambia de lado.'],
+    t: ['Si la punta del pie mira al techo, trabaja otro músculo: mantenla al frente.']
+  },
+  {
+    id: 'extension-cadera-banda', n: 'Extensión de cadera con banda', m: 'gluteos', p: ['casa', 'gym'], q: ['banda'], e: 'Banda elástica', img: true,
+    mu: 'Glúteos y femorales',
+    d: 'Activa los glúteos con una banda en cualquier sitio.',
+    s: ['Pisa la banda con ambos pies y sujeta los extremos a la altura de las rodillas.',
+        'Inclina el torso hacia delante llevando la cadera atrás, espalda recta.',
+        'Empuja la cadera hacia delante hasta quedar de pie apretando glúteos.',
+        'Vuelve despacio a la posición inclinada.'],
+    t: ['El movimiento sale de la cadera, no de la espalda.']
   },
   {
     id: 'abduccion-maquina', n: 'Abducción en máquina', m: 'gluteos', p: ['gym'], e: 'Máquina de abductores', img: true,
@@ -784,14 +806,14 @@ window.GB_EXERCISES = [
     t: ['Aterriza sobre la parte delantera del pie.']
   },
   {
-    id: 'saltos-rodillas', n: 'Saltos con rodillas al pecho', m: 'cardio', p: ['casa', 'gym'], q: [], e: 'Peso corporal', img: true,
-    mu: 'Piernas, core y potencia',
-    d: 'Pliométrico intenso.',
-    s: ['De pie con los pies a la anchura de la cadera.',
-        'Flexiona un poco las piernas y salta lo más alto posible.',
-        'Lleva las rodillas hacia el pecho en el aire.',
-        'Aterriza suave y repite.'],
-    t: ['Descansa lo necesario para mantener la calidad.']
+    id: 'burpees', n: 'Burpees', m: 'cardio', p: ['casa', 'gym'], q: [], e: 'Peso corporal', img: true,
+    mu: 'Cuerpo completo y cardio',
+    d: 'El ejercicio de cardio sin material más completo.',
+    s: ['De pie, baja en cuclillas y apoya las manos en el suelo.',
+        'Salta con los pies hacia atrás hasta quedar en plancha.',
+        'Vuelve a llevar los pies junto a las manos.',
+        'Salta hacia arriba estirando los brazos y repite.'],
+    t: ['Añade una flexión en la plancha para hacerlo más duro.', 'Si te cuesta, da pasos atrás en vez de saltar.']
   },
   {
     id: 'mountain-climbers', n: 'Escaladores (mountain climbers)', m: 'cardio', p: ['casa', 'gym'], q: [], e: 'Peso corporal', u: 'seg', img: true,
@@ -860,9 +882,9 @@ window.GB_EXERCISES = [
 window.GB_LEGACY = [
   { id: 'remo-banda', n: 'Remo con banda elástica', m: 'espalda', p: ['casa'], q: ['banda'] },
   { id: 'flexiones-pike', n: 'Flexiones pike', m: 'hombros', p: ['casa'], q: [] },
-  { id: 'curl-banda', n: 'Curl con banda elástica', m: 'biceps', p: ['casa'], q: ['banda'] },
   { id: 'curl-mochila', n: 'Curl con mochila', m: 'biceps', p: ['casa'], q: [] },
   { id: 'sentadilla-pared', n: 'Sentadilla isométrica en pared', m: 'piernas', p: ['casa'], q: [], u: 'seg' },
-  { id: 'burpees', n: 'Burpees', m: 'cardio', p: ['casa', 'gym'], q: [] },
+  { id: 'saltos-rodillas', n: 'Saltos con rodillas al pecho', m: 'cardio', p: ['casa', 'gym'], q: [] },
+  { id: 'patada-cuadrupedia', n: 'Patada de glúteo en cuadrupedia', m: 'gluteos', p: ['casa', 'gym'], q: [] },
   { id: 'high-knees', n: 'Rodillas al pecho', m: 'cardio', p: ['casa'], q: [], u: 'seg' }
 ];

@@ -1,9 +1,9 @@
 /* GYMBRO service worker: funciona sin conexión.
  * Sirve desde caché al instante y actualiza en segundo plano.
  * Sube CACHE de versión cuando cambies archivos. */
-const CACHE = 'gymbro-v1.1.0';
+const CACHE = 'gymbro-v2.0.0';
 const ASSETS = [
-  './', 'index.html', 'styles.css', 'data.js', 'app.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'data.js', 'muscles.js', 'app.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];
 

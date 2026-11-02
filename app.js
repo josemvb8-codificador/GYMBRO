@@ -2,12 +2,14 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.1.0';
+  const VERSION = '2.0.0';
   const KEY = 'gymbro.v1';
   const MUSCLES = window.GB_MUSCLES;
   const BASE_EX = window.GB_EXERCISES;
   const LEGACY = window.GB_LEGACY || [];
   const EQUIP = window.GB_EQUIPMENT || [];
+  const MUSCLE_MAP = window.GB_MUSCLE_MAP || {};
+  const BODY = window.GB_BODY || null;
   const DAY_SHORT = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
   const DAY_NAME = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -64,12 +66,51 @@
   const thumb = (ex, cls = '') => ex.img
     ? `<img class="thumb ${cls}" src="${imgSrc(ex, 't')}" alt="" loading="lazy" decoding="async">`
     : `<span class="avatar ${cls}">${esc(initials(ex.n))}</span>`;
+  const animSrc = (ex) => `img/ex/${ex.id}.webp`;
   const demoHtml = (ex) => ex.img
-    ? `<div class="demo" role="img" aria-label="Demostración: ${esc(ex.n)}">
-         <img src="${imgSrc(ex, 0)}" alt="" decoding="async"><img class="b" src="${imgSrc(ex, 1)}" alt="" decoding="async">
-         <span class="demo-badge"><i></i>Demostración</span>
+    ? `<div class="demo" role="img" aria-label="Animación: ${esc(ex.n)}">
+         <img src="${animSrc(ex)}" alt="" decoding="async">
+         <span class="demo-badge"><i></i>En movimiento</span>
        </div>`
     : `<div class="demo none"><span>${esc(initials(ex.n))}</span></div>`;
+
+  /* ---------- Mapa muscular (frente y espalda) ---------- */
+  const GROUP_KEYS = {
+    pecho: ['chest'], espalda: ['upper-back', 'lower-back', 'trapezius'], hombros: ['front-deltoids', 'back-deltoids'],
+    biceps: ['biceps'], triceps: ['triceps'], piernas: ['quadriceps', 'hamstring', 'calves', 'left-soleus', 'right-soleus', 'adductor'],
+    gluteos: ['gluteal', 'abductors'], core: ['abs', 'obliques'], cardio: ['quadriceps', 'hamstring', 'calves', 'left-soleus', 'right-soleus']
+  };
+  const bodyBox = {};
+  function bodyView(view) {
+    if (!bodyBox[view]) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const list of Object.values(BODY[view])) for (const pts of list) {
+        const n = pts.trim().split(/\s+/).map(Number);
+        for (let i = 0; i < n.length; i += 2) { x0 = Math.min(x0, n[i]); x1 = Math.max(x1, n[i]); y0 = Math.min(y0, n[i + 1]); y1 = Math.max(y1, n[i + 1]); }
+      }
+      const pad = 12;
+      bodyBox[view] = `${x0 - pad} ${y0 - pad} ${x1 - x0 + pad * 2} ${y1 - y0 + pad * 2}`;
+    }
+    return bodyBox[view];
+  }
+  function bodyMap(prim = [], sec = [], view = 'front', cls = '') {
+    if (!BODY) return '';
+    const polys = Object.entries(BODY[view]).map(([k, list]) => {
+      const c = prim.includes(k) ? 'p' : sec.includes(k) ? 's' : (k === 'head' || k === 'knees' || k === 'neck') ? 'n' : '';
+      return list.map((pts) => `<polygon class="${c}" points="${pts}"/>`).join('');
+    }).join('');
+    return `<svg class="bodymap ${cls}" viewBox="${bodyView(view)}" aria-hidden="true">${polys}</svg>`;
+  }
+  const exMuscles = (ex) => MUSCLE_MAP[ex.id] || [GROUP_KEYS[ex.m] || [], []];
+  function musclesHtml(ex) {
+    const [p, s] = exMuscles(ex);
+    if (!BODY || !p.length) return '';
+    return `<div class="section-title">Músculos trabajados</div>
+      <div class="muscle-card">
+        <div class="maps"><figure>${bodyMap(p, s, 'front')}<figcaption>Frente</figcaption></figure><figure>${bodyMap(p, s, 'back')}<figcaption>Espalda</figcaption></figure></div>
+        <div class="legend"><span><i class="p"></i>Principal</span><span><i class="s"></i>Secundario</span></div>
+      </div>`;
+  }
   const unitOf = (ex) => ex.u || 'reps';
   const unit = () => db.settings.unit;
   const toDisp = (kg) => (kg == null ? '' : unit() === 'lb' ? round(kg * LB, 1) : round(kg, 2));
@@ -694,17 +735,17 @@
     pullH: ['remo-barra', 'remo-polea-baja', 'remo-mancuerna', 'remo-invertido', 'superman'],
     lat: ['elevaciones-laterales', 'elevaciones-laterales-banda', 'elevaciones-frontales'],
     rear: ['face-pull', 'pajaros', 'separacion-banda', 'superman'],
-    bi: ['curl-barra', 'curl-mancuernas', 'curl-martillo', 'curl-polea', 'curl-concentrado', 'curl-predicador', 'dominadas-supinas'],
+    bi: ['curl-barra', 'curl-mancuernas', 'curl-martillo', 'curl-polea', 'curl-concentrado', 'curl-predicador', 'curl-banda', 'dominadas-supinas'],
     tri: ['extension-polea', 'press-frances', 'extension-sobre-cabeza', 'fondos-silla', 'flexiones-diamante', 'patada-triceps'],
     quadIso: ['extension-cuadriceps', 'zancadas', 'step-up', 'sentadilla-bulgara'],
     ham: ['curl-femoral', 'peso-muerto-rumano-mancuernas', 'puente-una-pierna', 'superman'],
-    glute: ['hip-thrust', 'abduccion-maquina', 'caminata-banda', 'puente-una-pierna', 'patada-cuadrupedia', 'puente-gluteo'],
+    glute: ['hip-thrust', 'abduccion-maquina', 'caminata-banda', 'puente-una-pierna', 'extension-cadera-banda', 'abduccion-lateral', 'puente-gluteo'],
     calf: ['pantorrillas'],
     core: ['crunch-polea', 'plancha', 'elevacion-piernas-colgado', 'crunch-bicicleta', 'dead-bug', 'elevacion-piernas', 'plancha-lateral', 'russian-twist', 'crunch'],
-    cardio: ['cinta', 'bici-estatica', 'remo-ergometro', 'eliptica', 'mountain-climbers', 'jumping-jacks', 'sentadilla-salto', 'saltos-rodillas']
+    cardio: ['cinta', 'bici-estatica', 'remo-ergometro', 'eliptica', 'mountain-climbers', 'burpees', 'jumping-jacks', 'sentadilla-salto']
   };
   const COMPOUND = ['sq', 'sq2', 'hinge', 'deadlift', 'pushH', 'pushInc', 'pushV', 'pullV', 'pullH'];
-  const NOT_BEGINNER = ['peso-muerto', 'flexiones-pino', 'elevacion-piernas-colgado', 'rueda-abdominal', 'saltos-rodillas', 'fondos-paralelas', 'dominadas', 'dominadas-supinas', 'sentadilla-barra', 'press-frances', 'sentadilla-bulgara'];
+  const NOT_BEGINNER = ['peso-muerto', 'flexiones-pino', 'elevacion-piernas-colgado', 'rueda-abdominal', 'fondos-paralelas', 'dominadas', 'dominadas-supinas', 'sentadilla-barra', 'press-frances', 'sentadilla-bulgara'];
   const TEMPLATES = {
     fullA: { n: 'Full body A', s: [['sq', 0], ['pushH', 0], ['pullH', 0], ['hinge', 0], ['pushV', 0], ['core', 0], ['bi', 0], ['tri', 0], ['calf', 0]] },
     fullB: { n: 'Full body B', s: [['sq2', 0], ['pushInc', 0], ['pullV', 0], ['hinge', 1], ['lat', 0], ['core', 1], ['tri', 1], ['bi', 1], ['glute', 0]] },
@@ -899,6 +940,115 @@
     return `Tu semana: ${names.join(' → ')}.`;
   }
 
+  /* ================= RUTINAS POR MÚSCULO (infografía) ================= */
+  // [ejercicio, series, reps] por nivel. Gym y casa.
+  const STAGES = {
+    pecho: {
+      gym: { principiante: [['press-maquina-pecho', 3, '12-15'], ['flexiones', 3, '8-12']], intermedio: [['press-mancuernas', 4, '8-12'], ['press-inclinado-mancuernas', 3, '10-12']], avanzado: [['press-banca', 4, '6-8'], ['fondos-paralelas', 3, '8-12']] },
+      casa: { principiante: [['flexiones-inclinadas', 3, '10-15'], ['flexiones', 2, '6-10']], intermedio: [['flexiones', 4, '12-20'], ['flexiones-declinadas', 3, '10-15']], avanzado: [['flexiones-declinadas', 4, '15-20'], ['flexiones-diamante', 4, '12-15']] }
+    },
+    espalda: {
+      gym: { principiante: [['jalon-pecho', 3, '12-15'], ['remo-polea-baja', 3, '12-15']], intermedio: [['remo-mancuerna', 4, '8-12'], ['dominadas', 3, '6-10']], avanzado: [['peso-muerto', 4, '5'], ['remo-barra', 4, '6-8']] },
+      casa: { principiante: [['superman', 3, '12-15'], ['remo-invertido', 3, '8-10']], intermedio: [['remo-invertido', 4, '10-15'], ['remo-mancuerna', 4, '10-12']], avanzado: [['dominadas', 4, '6-10'], ['dominadas-supinas', 3, '8-10']] }
+    },
+    hombros: {
+      gym: { principiante: [['press-hombro-mancuernas', 3, '10-12'], ['elevaciones-laterales', 3, '12-15']], intermedio: [['press-militar', 4, '8-10'], ['face-pull', 3, '12-15']], avanzado: [['press-militar', 5, '5-8'], ['pajaros', 4, '12-15']] },
+      casa: { principiante: [['press-hombro-banda', 3, '10-12'], ['elevaciones-laterales-banda', 3, '12-15']], intermedio: [['press-hombro-mancuernas', 4, '10-12'], ['elevaciones-laterales', 3, '12-15']], avanzado: [['flexiones-pino', 4, '5-8'], ['pajaros', 4, '12-15']] }
+    },
+    biceps: {
+      gym: { principiante: [['curl-polea', 3, '12-15'], ['curl-mancuernas', 3, '10-12']], intermedio: [['curl-barra', 4, '8-12'], ['curl-martillo', 3, '10-12']], avanzado: [['curl-predicador', 4, '8-10'], ['curl-concentrado', 3, '10-12']] },
+      casa: { principiante: [['curl-banda', 3, '12-15'], ['curl-mancuernas', 3, '10-12']], intermedio: [['curl-martillo', 4, '10-12'], ['curl-concentrado', 3, '10-12']], avanzado: [['dominadas-supinas', 4, '6-10'], ['curl-mancuernas', 4, '8-10']] }
+    },
+    triceps: {
+      gym: { principiante: [['extension-polea', 3, '12-15'], ['fondos-silla', 3, '10-12']], intermedio: [['press-frances', 4, '8-12'], ['extension-sobre-cabeza', 3, '10-12']], avanzado: [['fondos-paralelas', 4, '8-10'], ['press-frances', 4, '6-8']] },
+      casa: { principiante: [['fondos-silla', 3, '10-12'], ['flexiones-diamante', 2, '6-10']], intermedio: [['extension-sobre-cabeza', 4, '10-12'], ['patada-triceps', 3, '12-15']], avanzado: [['flexiones-diamante', 4, '12-15'], ['fondos-silla', 4, '15-20']] }
+    },
+    piernas: {
+      gym: { principiante: [['prensa', 3, '12-15'], ['extension-cuadriceps', 3, '12-15']], intermedio: [['sentadilla-goblet', 4, '8-12'], ['sentadilla-barra', 4, '6-10']], avanzado: [['sentadilla-bulgara', 4, '8-10'], ['peso-muerto-rumano', 4, '6-8']] },
+      casa: { principiante: [['sentadilla-libre', 3, '15'], ['step-up', 3, '10']], intermedio: [['zancadas', 4, '12'], ['sentadilla-goblet', 4, '10-12']], avanzado: [['sentadilla-bulgara', 4, '10-12'], ['sentadilla-salto', 4, '12']] }
+    },
+    gluteos: {
+      gym: { principiante: [['abduccion-maquina', 3, '15'], ['puente-gluteo', 3, '15']], intermedio: [['hip-thrust', 4, '10-12'], ['patada-polea', 3, '12-15']], avanzado: [['hip-thrust', 4, '6-8'], ['peso-muerto-rumano', 4, '8']] },
+      casa: { principiante: [['puente-gluteo', 3, '15'], ['abduccion-lateral', 3, '15']], intermedio: [['puente-una-pierna', 4, '12'], ['extension-cadera-banda', 3, '15']], avanzado: [['sentadilla-bulgara', 4, '10'], ['caminata-banda', 4, '15']] }
+    },
+    core: {
+      gym: { principiante: [['plancha', 3, '30'], ['crunch', 3, '15']], intermedio: [['crunch-polea', 4, '12-15'], ['plancha-lateral', 3, '30']], avanzado: [['elevacion-piernas-colgado', 4, '10-12'], ['rueda-abdominal', 4, '8-12']] },
+      casa: { principiante: [['plancha', 3, '30'], ['dead-bug', 3, '10']], intermedio: [['crunch-bicicleta', 4, '20'], ['plancha-lateral', 3, '40']], avanzado: [['elevacion-piernas', 4, '15'], ['russian-twist', 4, '20']] }
+    },
+    cardio: {
+      gym: { principiante: [['cinta', 1, '20'], ['bici-estatica', 1, '15']], intermedio: [['eliptica', 1, '20'], ['remo-ergometro', 1, '10']], avanzado: [['comba', 5, '2'], ['burpees', 5, '15']] },
+      casa: { principiante: [['jumping-jacks', 3, '30'], ['mountain-climbers', 3, '20']], intermedio: [['burpees', 4, '10'], ['sentadilla-salto', 3, '15']], avanzado: [['burpees', 5, '15'], ['mountain-climbers', 5, '45']] }
+    }
+  };
+  const STAGE_NAMES = { principiante: 'Principiante', intermedio: 'Intermedio', avanzado: 'Avanzado' };
+  const STAGE_REST = { principiante: 60, intermedio: 90, avanzado: 120 };
+  const unitShort = (ex) => ({ reps: 'reps', seg: 'seg', min: 'min' }[unitOf(ex)]);
+
+  function renderMuscleGroups() {
+    return `<p class="muted small" style="margin:0 2px 12px">Elige un grupo muscular y verás qué hacer según tu nivel, con series y repeticiones.</p>
+      <div class="mg-grid">${MUSCLES.map((m) => `
+        <button class="mg-card" data-action="muscle-poster" data-v="${m.id}">
+          <span class="mg-maps">${bodyMap(GROUP_KEYS[m.id], [], ['espalda', 'gluteos', 'triceps'].includes(m.id) ? 'back' : 'front')}</span>
+          <b>${esc(m.n)}</b>
+        </button>`).join('')}</div>`;
+  }
+
+  function musclePoster(group) {
+    const st = { place: ui.lib.place === 'casa' ? 'casa' : 'gym', stage: 'principiante' };
+    const m = MUSCLES.find((x) => x.id === group);
+    const s = openSheet({
+      title: m.n,
+      full: true,
+      body: () => {
+        const data = STAGES[group][st.place];
+        return `
+          <div class="seg" style="margin-bottom:12px">
+            <button class="${st.place === 'gym' ? 'on' : ''}" data-action="mp-place" data-v="gym">🏋️ Gimnasio</button>
+            <button class="${st.place === 'casa' ? 'on' : ''}" data-action="mp-place" data-v="casa">🏠 Casa</button>
+          </div>
+          <div class="poster">
+            <div class="poster-title"><span>Rutina estándar</span><h2>${esc(m.n.toUpperCase())}</h2></div>
+            <div class="poster-maps">${bodyMap(GROUP_KEYS[group], [], 'front')}${bodyMap(GROUP_KEYS[group], [], 'back')}</div>
+            ${Object.entries(data).map(([lvl, list]) => `
+              <button class="poster-stage ${st.stage === lvl ? 'on' : ''}" data-action="mp-stage" data-v="${lvl}">
+                <div class="ps-text">
+                  <h3>${STAGE_NAMES[lvl]}</h3>
+                  ${list.map(([id, sets, reps]) => { const ex = exById(id); return `<p><b>${esc(ex.n)}:</b><br><span>${sets} ${sets === 1 ? 'serie' : 'series'} × ${esc(reps)} ${unitShort(ex)}</span></p>`; }).join('')}
+                </div>
+                <div class="ps-tiles">
+                  ${list.map(([id, sets, reps]) => { const ex = exById(id); return `<span class="ps-tile" data-action="ex-detail" data-id="${esc(id)}">${thumb(ex)}<b>${sets}x${esc(String(reps).split('-')[0])}</b></span>`; }).join('')}
+                </div>
+              </button>`).join('')}
+          </div>
+          <p class="muted small" style="margin-top:12px">Toca un nivel para elegirlo y una imagen para ver cómo se hace.</p>`;
+      },
+      foot: () => `<button class="btn primary block" data-action="mp-train">${ICON.play} Entrenar nivel ${STAGE_NAMES[st.stage].toLowerCase()}</button>
+        <button class="btn block" data-action="mp-save">${ICON.plus} Guardar como rutina</button>`,
+      actions: {
+        'mp-place': (b) => { st.place = b.dataset.v; s.refresh(); },
+        'mp-stage': (b, ev) => { st.stage = b.dataset.v; s.refresh(); },
+        'mp-train': () => {
+          if (db.active) { toast('Ya tienes un entrenamiento en curso'); return; }
+          const r = stageRoutine();
+          s.close(); startWorkout(r);
+        },
+        'mp-save': () => {
+          const r = stageRoutine();
+          r.id = uid();
+          db.routines.push(r); save(); s.close(); render();
+          toast(`Rutina "${r.name}" guardada ✅`);
+        }
+      }
+    });
+    function stageRoutine() {
+      const list = STAGES[group][st.place][st.stage];
+      return {
+        id: 'tmp', name: `${m.n} · ${STAGE_NAMES[st.stage]}${st.place === 'casa' ? ' · Casa' : ''}`, days: [], note: `Rutina por músculo · ${STAGE_NAMES[st.stage]}`,
+        items: list.map(([exId, sets, reps]) => ({ exId, sets, reps: String(reps), rest: unitOf(exById(exId)) === 'reps' ? STAGE_REST[st.stage] : 45 }))
+      };
+    }
+  }
+
   /* ================= BIBLIOTECA ================= */
   function filterEx(f) {
     const q = f.q.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -942,7 +1092,12 @@
   }
 
   function renderLibrary() {
-    return filtersHtml(ui.lib, 'lib') +
+    const tabs = `<div class="seg" style="margin-bottom:12px">
+      <button class="${ui.libMode !== 'muscles' ? 'on' : ''}" data-action="lib-mode" data-v="list">Biblioteca</button>
+      <button class="${ui.libMode === 'muscles' ? 'on' : ''}" data-action="lib-mode" data-v="muscles">Por músculo</button>
+    </div>`;
+    if (ui.libMode === 'muscles') return tabs + renderMuscleGroups();
+    return tabs + filtersHtml(ui.lib, 'lib') +
       `<div id="lib-list">${libListHtml()}</div>
        <button class="btn block" data-action="new-exercise" style="margin-top:14px">${ICON.plus} Crear ejercicio personalizado</button>`;
   }
@@ -965,6 +1120,7 @@
           ${ex.mu ? `<div><span>Músculos</span><b>${esc(ex.mu)}</b></div>` : ''}
           ${ex.e ? `<div><span>Equipo</span><b>${esc(ex.e)}</b></div>` : ''}
         </div>
+        ${musclesHtml(ex)}
         ${ex.s && ex.s.length ? `<div class="section-title">Cómo hacerlo</div><ol class="steps">${ex.s.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>` : ''}
         ${ex.t && ex.t.length ? `<div class="section-title">Consejos clave</div><ul class="tips">${ex.t.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
         ${stats.length ? progressHtml(id) : '<div class="card muted small" style="margin-top:18px">Aún no has registrado este ejercicio. Cuando lo hagas verás aquí tu progreso.</div>'}
@@ -1263,7 +1419,7 @@
         <div class="set-group">
           <button class="set-line" data-action="reset" style="color:var(--danger)"><span>Borrar todos los datos</span>${ICON.trash.replace('<svg', '<svg width="20" height="20"')}</button>
         </div>
-        <p class="muted small" style="text-align:center">GYMBRO v${VERSION} · ${db.history.length} entrenos · ${db.routines.length} rutinas<br>Fotos de ejercicios: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">Free Exercise DB</a> (dominio público)</p>`,
+        <p class="muted small" style="text-align:center">GYMBRO v${VERSION} · ${db.history.length} entrenos · ${db.routines.length} rutinas<br>Animaciones: <a href="https://github.com/AbanoubAmir/open-exercise-figures" target="_blank" rel="noopener">Open Exercise Figures</a> (CC0) · Mapa muscular: <a href="https://github.com/giavinh79/react-body-highlighter" target="_blank" rel="noopener">react-body-highlighter</a> (MIT)</p>`,
       onInput(t) {
         if (t.dataset.set === 'rest') { db.settings.rest = +t.value; save(); render(); }
       },
@@ -1308,7 +1464,7 @@
       return;
     }
     caching = true;
-    const urls = BASE_EX.filter((e) => e.img).flatMap((e) => [imgSrc(e, 't'), imgSrc(e, 0), imgSrc(e, 1)]);
+    const urls = BASE_EX.filter((e) => e.img).flatMap((e) => [imgSrc(e, 't'), animSrc(e)]);
     let done = 0, failed = 0;
     const next = async () => {
       while (urls.length) {
@@ -1481,6 +1637,8 @@
     'f-muscle': (b) => { ui.lib.muscle = b.dataset.v; render(); },
     'ex-detail': (b) => exDetail(b.dataset.id),
     'new-exercise': newExercise,
+    'lib-mode': (b) => { ui.libMode = b.dataset.v; render(); },
+    'muscle-poster': (b) => musclePoster(b.dataset.v),
     'hist-mode': (b) => { ui.histMode = b.dataset.v; render(); },
     'session-detail': (b) => sessionDetail(b.dataset.id),
     'ex-progress': (b) => exProgress(b.dataset.id)
