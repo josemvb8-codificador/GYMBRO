@@ -2,10 +2,12 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const KEY = 'gymbro.v1';
   const MUSCLES = window.GB_MUSCLES;
   const BASE_EX = window.GB_EXERCISES;
+  const LEGACY = window.GB_LEGACY || [];
+  const EQUIP = window.GB_EQUIPMENT || [];
   const DAY_SHORT = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
   const DAY_NAME = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -57,7 +59,17 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const muscleName = (id) => (MUSCLES.find((m) => m.id === id) || { n: id }).n;
   const allEx = () => BASE_EX.concat(db.custom);
-  const exById = (id) => allEx().find((e) => e.id === id) || { id, n: 'Ejercicio eliminado', m: 'core', p: [], e: '', d: '' };
+  const exById = (id) => BASE_EX.find((e) => e.id === id) || db.custom.find((e) => e.id === id) || LEGACY.find((e) => e.id === id) || { id, n: 'Ejercicio eliminado', m: 'core', p: [], e: '', d: '' };
+  const imgSrc = (ex, f) => `img/ex/${ex.id}-${f}.webp`;
+  const thumb = (ex, cls = '') => ex.img
+    ? `<img class="thumb ${cls}" src="${imgSrc(ex, 't')}" alt="" loading="lazy" decoding="async">`
+    : `<span class="avatar ${cls}">${esc(initials(ex.n))}</span>`;
+  const demoHtml = (ex) => ex.img
+    ? `<div class="demo" role="img" aria-label="Demostración: ${esc(ex.n)}">
+         <img src="${imgSrc(ex, 0)}" alt="" decoding="async"><img class="b" src="${imgSrc(ex, 1)}" alt="" decoding="async">
+         <span class="demo-badge"><i></i>Demostración</span>
+       </div>`
+    : `<div class="demo none"><span>${esc(initials(ex.n))}</span></div>`;
   const unitOf = (ex) => ex.u || 'reps';
   const unit = () => db.settings.unit;
   const toDisp = (kg) => (kg == null ? '' : unit() === 'lb' ? round(kg * LB, 1) : round(kg, 2));
@@ -239,11 +251,12 @@
       html += `
         <div class="card empty">
           <div class="big">🏋️</div>
-          <h3>Crea tu primera rutina</h3>
-          <p>Organiza tus ejercicios por día o empieza con rutinas de ejemplo para casa y gym.</p>
+          <h3>Empecemos tu plan</h3>
+          <p>Responde 4 preguntas y GYMBRO te arma una rutina completa, con imágenes de cada ejercicio.</p>
           <div class="stack">
-            <button class="btn primary block" data-action="new-routine">${ICON.plus} Crear rutina</button>
-            <button class="btn block" data-action="sample-routines">Cargar rutinas de ejemplo</button>
+            <button class="btn primary block" data-action="generator">✨ Armar mi rutina</button>
+            <button class="btn block" data-action="new-routine">${ICON.plus} Crearla yo mismo</button>
+            <button class="btn ghost block" data-action="sample-routines">Cargar rutinas de ejemplo</button>
           </div>
         </div>`;
     } else {
@@ -255,7 +268,7 @@
         html += `<div class="section-title">Otras rutinas</div><div class="ex-list">`;
         html += others.map((r) => `
           <button class="ex-item" data-action="start-routine" data-id="${r.id}">
-            <span class="avatar">${esc(initials(r.name))}</span>
+            ${r.items[0] ? thumb(exById(r.items[0].exId)) : `<span class="avatar">${esc(initials(r.name))}</span>`}
             <span class="grow"><div class="name ellipsis">${esc(r.name)}</div><div class="meta">${r.items.length} ejercicios · ${daysLabel(r.days)}</div></span>
             <span class="tag accent">Empezar</span>
           </button>`).join('');
@@ -295,6 +308,8 @@
           </div>
           <button class="icon-btn" data-action="edit-routine" data-id="${r.id}" aria-label="Editar rutina">${ICON.more}</button>
         </div>
+        ${r.items.length ? `<div class="thumb-strip">${r.items.slice(0, 6).map((it) => thumb(exById(it.exId), 'sm')).join('')}${r.items.length > 6 ? `<span class="more">+${r.items.length - 6}</span>` : ''}</div>` : ''}
+        ${r.note ? `<div class="note"><span class="tag accent">${esc(r.note)}</span></div>` : ''}
         <div class="list">${names.length ? esc(names.slice(0, 4).join(' · ')) + (names.length > 4 ? ` · +${names.length - 4}` : '') : 'Sin ejercicios'}</div>
         <button class="btn ${startBig ? 'primary' : ''} block" data-action="start-routine" data-id="${r.id}">${ICON.play} Empezar · ${r.items.length} ejercicios</button>
       </div>`;
@@ -352,6 +367,7 @@
       html += `
         <article class="ex-card ${complete ? 'complete' : ''}" data-e="${ei}">
           <header>
+            <button class="ex-thumb" data-action="ex-detail" data-id="${esc(ex.id)}" aria-label="Ver cómo se hace ${esc(ex.n)}">${thumb(ex)}${ex.s ? '<i>?</i>' : ''}</button>
             <div class="grow">
               <h3>${esc(ex.n)}</h3>
               <div class="sub">${muscleName(ex.m)} · ${targetTxt}</div>
@@ -538,7 +554,12 @@
 
   /* ================= RUTINAS ================= */
   function renderRoutines() {
-    let html = `<button class="btn primary block" data-action="new-routine" style="margin-bottom:14px">${ICON.plus} Nueva rutina</button>`;
+    let html = `
+      <button class="gen-cta" data-action="generator">
+        <span class="gen-cta-art">${['sentadilla-goblet', 'press-banca', 'dominadas'].map((id) => thumb(exById(id))).join('')}</span>
+        <span class="grow"><b>Armar mi rutina ✨</b><small>Plan personalizado según tu objetivo, nivel y días</small></span>${ICON.chev}
+      </button>
+      <button class="btn block" data-action="new-routine" style="margin-bottom:14px">${ICON.plus} Nueva rutina manual</button>`;
     if (!db.routines.length) {
       html += `<div class="card empty"><div class="big">📅</div><h3>Aún no tienes rutinas</h3><p>Crea una rutina, asígnale días de la semana y añade ejercicios con sus series, repeticiones y descanso.</p><button class="btn block" data-action="sample-routines">Cargar rutinas de ejemplo</button></div>`;
       return html;
@@ -572,6 +593,7 @@
           return `
           <div class="re-item">
             <div class="top">
+              <button class="ex-thumb sm" data-action="ex-detail" data-id="${esc(ex.id)}" aria-label="Ver técnica">${thumb(ex, 'sm')}</button>
               <b class="ellipsis">${i + 1}. ${esc(ex.n)}</b>
               <button class="mini" data-action="r-move" data-i="${i}" data-d="-1" aria-label="Subir" ${i === 0 ? 'disabled' : ''}>${ICON.up}</button>
               <button class="mini" data-action="r-move" data-i="${i}" data-d="1" aria-label="Bajar" ${i === draft.items.length - 1 ? 'disabled' : ''}>${ICON.down}</button>
@@ -630,7 +652,7 @@
     db.routines.push(
       mk('Full body en casa', [1, 3, 5], [
         ['flexiones', 3, '10-15', 60], ['sentadilla-libre', 3, '15', 60], ['remo-invertido', 3, '8-12', 60],
-        ['zancadas', 3, '12', 60], ['flexiones-pike', 3, '8', 60], ['puente-gluteo', 3, '15', 45], ['plancha', 3, '30', 45]
+        ['zancadas', 3, '12', 60], ['flexiones-declinadas', 3, '8-12', 60], ['puente-gluteo', 3, '15', 45], ['plancha', 3, '30', 45]
       ]),
       mk('Torso gym', [2], [
         ['press-banca', 4, '6-8', 150], ['remo-barra', 4, '8', 120], ['press-inclinado-mancuernas', 3, '10', 90],
@@ -642,6 +664,239 @@
       ])
     );
     save(); render(); toast('Rutinas de ejemplo añadidas');
+  }
+
+  /* ================= GENERADOR DE RUTINAS ================= */
+  const GOALS = [
+    { id: 'musculo', n: 'Ganar músculo', d: 'Hipertrofia: más volumen y tamaño', i: '💪' },
+    { id: 'fuerza', n: 'Ganar fuerza', d: 'Cargas altas y pocas repeticiones', i: '🏋️' },
+    { id: 'grasa', n: 'Perder grasa', d: 'Ritmo alto, descansos cortos y cardio', i: '🔥' },
+    { id: 'salud', n: 'Tonificar y salud', d: 'Ponerte en forma y sentirte bien', i: '❤️' }
+  ];
+  const LEVELS = [
+    { id: 'principiante', n: 'Principiante', d: 'Llevo menos de 6 meses entrenando', i: '🌱' },
+    { id: 'intermedio', n: 'Intermedio', d: 'Entreno de forma constante hace 6 meses–2 años', i: '⚡' },
+    { id: 'avanzado', n: 'Avanzado', d: 'Más de 2 años entrenando en serio', i: '🏆' }
+  ];
+  const DURATIONS = [[30, '30 min'], [45, '45 min'], [60, '60 min'], [75, '75+ min']];
+  const DEFAULT_DAYS = { 1: [1], 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3, 5, 6], 6: [1, 2, 3, 4, 5, 6] };
+
+  // Cada "hueco" de la rutina con candidatos en orden de preferencia
+  const SLOTS = {
+    sq: ['sentadilla-barra', 'sentadilla-goblet', 'prensa', 'sentadilla-bulgara', 'sentadilla-libre'],
+    sq2: ['prensa', 'zancadas', 'sentadilla-bulgara', 'sentadilla-goblet', 'step-up', 'sentadilla-libre'],
+    hinge: ['peso-muerto-rumano', 'peso-muerto-rumano-mancuernas', 'hip-thrust', 'puente-una-pierna', 'puente-gluteo'],
+    deadlift: ['peso-muerto', 'peso-muerto-rumano', 'peso-muerto-rumano-mancuernas', 'puente-una-pierna'],
+    pushH: ['press-banca', 'press-mancuernas', 'press-maquina-pecho', 'flexiones', 'flexiones-inclinadas'],
+    pushInc: ['press-inclinado-mancuernas', 'fondos-paralelas', 'cruce-poleas', 'flexiones-declinadas', 'aperturas', 'flexiones-inclinadas'],
+    pushV: ['press-militar', 'press-hombro-mancuernas', 'press-hombro-banda', 'flexiones-pino', 'flexiones-declinadas'],
+    pullV: ['dominadas', 'jalon-pecho', 'dominadas-supinas', 'remo-invertido'],
+    pullH: ['remo-barra', 'remo-polea-baja', 'remo-mancuerna', 'remo-invertido', 'superman'],
+    lat: ['elevaciones-laterales', 'elevaciones-laterales-banda', 'elevaciones-frontales'],
+    rear: ['face-pull', 'pajaros', 'separacion-banda', 'superman'],
+    bi: ['curl-barra', 'curl-mancuernas', 'curl-martillo', 'curl-polea', 'curl-concentrado', 'curl-predicador', 'dominadas-supinas'],
+    tri: ['extension-polea', 'press-frances', 'extension-sobre-cabeza', 'fondos-silla', 'flexiones-diamante', 'patada-triceps'],
+    quadIso: ['extension-cuadriceps', 'zancadas', 'step-up', 'sentadilla-bulgara'],
+    ham: ['curl-femoral', 'peso-muerto-rumano-mancuernas', 'puente-una-pierna', 'superman'],
+    glute: ['hip-thrust', 'abduccion-maquina', 'caminata-banda', 'puente-una-pierna', 'patada-cuadrupedia', 'puente-gluteo'],
+    calf: ['pantorrillas'],
+    core: ['crunch-polea', 'plancha', 'elevacion-piernas-colgado', 'crunch-bicicleta', 'dead-bug', 'elevacion-piernas', 'plancha-lateral', 'russian-twist', 'crunch'],
+    cardio: ['cinta', 'bici-estatica', 'remo-ergometro', 'eliptica', 'mountain-climbers', 'jumping-jacks', 'sentadilla-salto', 'saltos-rodillas']
+  };
+  const COMPOUND = ['sq', 'sq2', 'hinge', 'deadlift', 'pushH', 'pushInc', 'pushV', 'pullV', 'pullH'];
+  const NOT_BEGINNER = ['peso-muerto', 'flexiones-pino', 'elevacion-piernas-colgado', 'rueda-abdominal', 'saltos-rodillas', 'fondos-paralelas', 'dominadas', 'dominadas-supinas', 'sentadilla-barra', 'press-frances', 'sentadilla-bulgara'];
+  const TEMPLATES = {
+    fullA: { n: 'Full body A', s: [['sq', 0], ['pushH', 0], ['pullH', 0], ['hinge', 0], ['pushV', 0], ['core', 0], ['bi', 0], ['tri', 0], ['calf', 0]] },
+    fullB: { n: 'Full body B', s: [['sq2', 0], ['pushInc', 0], ['pullV', 0], ['hinge', 1], ['lat', 0], ['core', 1], ['tri', 1], ['bi', 1], ['glute', 0]] },
+    fullC: { n: 'Full body C', s: [['sq', 1], ['pushH', 1], ['pullH', 1], ['glute', 0], ['rear', 0], ['core', 2], ['bi', 0], ['tri', 0], ['calf', 0]] },
+    upA: { n: 'Torso A', s: [['pushH', 0], ['pullV', 0], ['pushV', 0], ['pullH', 0], ['lat', 0], ['bi', 0], ['tri', 0], ['rear', 0]] },
+    upB: { n: 'Torso B', s: [['pullH', 1], ['pushInc', 0], ['pullV', 1], ['pushH', 1], ['rear', 0], ['tri', 1], ['bi', 1], ['lat', 0]] },
+    lowA: { n: 'Pierna A', s: [['sq', 0], ['hinge', 0], ['quadIso', 0], ['ham', 0], ['glute', 0], ['calf', 0], ['core', 0]] },
+    lowB: { n: 'Pierna B', s: [['hinge', 1], ['sq2', 0], ['glute', 0], ['ham', 0], ['quadIso', 1], ['calf', 0], ['core', 1]] },
+    push: { n: 'Empuje', s: [['pushH', 0], ['pushV', 0], ['pushInc', 0], ['lat', 0], ['tri', 0], ['tri', 1], ['core', 0]] },
+    pull: { n: 'Tirón', s: [['pullV', 0], ['pullH', 0], ['pullH', 0], ['rear', 0], ['bi', 0], ['bi', 1], ['core', 1]] }
+  };
+
+  function splitFor(n, level) {
+    if (n <= 1) return [['fullA', 0]];
+    if (n === 2) return [['fullA', 0], ['fullB', 0]];
+    if (n === 3) return level === 'avanzado' ? [['push', 0], ['pull', 0], ['lowA', 0]] : [['fullA', 0], ['fullB', 0], ['fullC', 0]];
+    if (n === 4) return [['upA', 0], ['lowA', 0], ['upB', 0], ['lowB', 0]];
+    if (n === 5) return [['upA', 0], ['lowA', 0], ['push', 1], ['pull', 1], ['lowB', 0]];
+    return [['push', 0], ['pull', 0], ['lowA', 0], ['push', 1], ['pull', 1], ['lowB', 0]];
+  }
+
+  const ONLY_BEGINNER = ['flexiones-inclinadas'];
+  const ONLY_ADVANCED = ['flexiones-pino'];
+  const WEAK = ['superman', 'elevaciones-frontales', 'puente-gluteo', 'crunch']; // solo si no hay nada mejor
+
+  function exAvailable(ex, g) {
+    if (!ex || !ex.p.includes(g.place)) return false;
+    if (g.level === 'principiante' && NOT_BEGINNER.includes(ex.id)) return false;
+    if (g.level !== 'principiante' && ONLY_BEGINNER.includes(ex.id)) return false;
+    if (g.level !== 'avanzado' && ONLY_ADVANCED.includes(ex.id)) return false;
+    if (g.place === 'casa') return (ex.q || []).every((q) => g.equip.includes(q));
+    return true;
+  }
+
+  function prescription(slot, ex, g, idx) {
+    const u = unitOf(ex);
+    const L = { principiante: 0, intermedio: 1, avanzado: 2 }[g.level];
+    if (u === 'min') return { sets: 1, reps: g.goal === 'grasa' ? '15' : '10', rest: 60 };
+    if (u === 'seg') return { sets: 3, reps: ['30', '40', '60'][L], rest: g.goal === 'grasa' ? 30 : 45 };
+    const comp = COMPOUND.includes(slot);
+    const bodyweight = !ex.q || !ex.q.length ? g.place === 'casa' && !/mancuern|barra/i.test(ex.e || '') : false;
+    let sets, reps, rest;
+    switch (g.goal) {
+      case 'fuerza':
+        if (comp && idx < 2) { sets = [3, 4, 5][L]; reps = '4-6'; rest = 180; }
+        else if (comp) { sets = [3, 3, 4][L]; reps = '6-8'; rest = 120; }
+        else { sets = 3; reps = '8-12'; rest = 75; }
+        break;
+      case 'grasa':
+        sets = comp ? [3, 3, 4][L] : 3; reps = comp ? '12-15' : '15-20'; rest = comp ? 60 : 45;
+        break;
+      case 'salud':
+        sets = comp ? 3 : [2, 3, 3][L]; reps = comp ? '10-12' : '12-15'; rest = comp ? 75 : 60;
+        break;
+      default: // músculo
+        if (comp && idx === 0 && L > 0) { sets = 4; reps = '6-10'; rest = 120; }
+        else if (comp) { sets = [3, 4, 4][L]; reps = '8-12'; rest = 90; }
+        else { sets = [2, 3, 4][L]; reps = '10-15'; rest = 60; }
+    }
+    if (bodyweight && g.place === 'casa') {
+      reps = { fuerza: '6-12', musculo: '10-20', grasa: '15-20', salud: '10-15' }[g.goal];
+      if (rest > 90) rest = 90;
+    }
+    return { sets, reps, rest };
+  }
+
+  function generatePlan(g) {
+    const days = WEEK_ORDER.filter((d) => g.days.includes(d));
+    const split = splitFor(days.length, g.level);
+    const perDay = { 30: 4, 45: 5, 60: 6, 75: 7 }[g.dur] - (g.level === 'principiante' && g.dur > 45 ? 1 : 0);
+    const goal = GOALS.find((x) => x.id === g.goal);
+    const level = LEVELS.find((x) => x.id === g.level);
+    return split.map(([tid, vOff], i) => {
+      const t = TEMPLATES[tid];
+      const used = new Set();
+      const items = [];
+      let slots = t.s.map(([slot, v]) => [g.goal === 'fuerza' && slot === 'hinge' && v === 0 && g.place === 'gym' && g.level !== 'principiante' ? 'deadlift' : slot, v]);
+      if (g.goal === 'grasa') slots = slots.slice(0, perDay - 1).concat([['cardio', i]]);
+      for (const [slot, v] of slots) {
+        if (items.length >= perDay) break;
+        const cands = SLOTS[slot].map(exById).filter((ex) => exAvailable(ex, g) && !used.has(ex.id));
+        if (!cands.length) continue;
+        const strong = cands.filter((ex) => !WEAK.includes(ex.id));
+        const pool = strong.length ? strong : cands;
+        const ex = pool[(v + vOff + g.seed) % Math.min(pool.length, 2)];
+        used.add(ex.id);
+        items.push({ exId: ex.id, ...prescription(slot, ex, g, items.length) });
+      }
+      // Rellenar si faltan ejercicios (p. ej. en casa sin material)
+      const fill = ['core', 'glute', 'sq2', 'pushH', 'pullH', 'cardio'];
+      for (let k = 0; items.length < Math.min(perDay, 5) && k < fill.length; k++) {
+        const ex = SLOTS[fill[k]].map(exById).find((e) => exAvailable(e, g) && !used.has(e.id));
+        if (ex) { used.add(ex.id); items.push({ exId: ex.id, ...prescription(fill[k], ex, g, items.length) }); }
+      }
+      const name = t.n + (vOff && /Empuje|Tirón/.test(t.n) ? ' B' : '') + (g.place === 'casa' ? ' · Casa' : '');
+      return { id: uid(), name, days: [days[i]], items, note: `${goal.n} · ${level.n}` };
+    });
+  }
+
+  function openGenerator() {
+    const g = { step: 0, goal: null, place: null, equip: [], level: null, days: DEFAULT_DAYS[3].slice(), dur: 60, seed: 0, replace: db.routines.length > 0 };
+    let plan = null;
+    const STEPS = 5;
+    const optCard = (action, o, on) => `
+      <button class="opt ${on ? 'on' : ''}" data-action="${action}" data-v="${o.id}">
+        <span class="opt-i">${o.i}</span><span class="grow"><b>${esc(o.n)}</b><small>${esc(o.d)}</small></span>
+        <span class="check">${on ? ICON.check.replace('stroke-width="3"', 'stroke-width="3" width="16" height="16"') : ''}</span>
+      </button>`;
+    const stepBody = () => {
+      const dots = `<div class="wiz-dots">${Array.from({ length: STEPS }, (_, k) => `<i class="${k <= g.step ? 'on' : ''}"></i>`).join('')}</div>`;
+      if (g.step === 0) return dots + `<h3 class="wiz-q">¿Cuál es tu objetivo?</h3><div class="opts">${GOALS.map((o) => optCard('g-goal', o, g.goal === o.id)).join('')}</div>`;
+      if (g.step === 1) return dots + `<h3 class="wiz-q">¿Dónde vas a entrenar?</h3>
+        <div class="opts">
+          ${optCard('g-place', { id: 'gym', n: 'En el gimnasio', d: 'Máquinas, barras, poleas y mancuernas', i: '🏋️' }, g.place === 'gym')}
+          ${optCard('g-place', { id: 'casa', n: 'En casa', d: 'Con tu peso corporal y lo que tengas', i: '🏠' }, g.place === 'casa')}
+        </div>
+        ${g.place === 'casa' ? `<div class="section-title">¿Qué material tienes?</div>
+          <div class="chips wrap">${EQUIP.map((q) => `<button class="chip ${g.equip.includes(q.id) ? 'on' : ''}" data-action="g-equip" data-v="${q.id}">${esc(q.n)}</button>`).join('')}</div>
+          <p class="muted small">Si no marcas nada, la rutina será solo con peso corporal (suelo, silla y mesa).</p>` : ''}`;
+      if (g.step === 2) return dots + `<h3 class="wiz-q">¿Cuál es tu nivel?</h3><div class="opts">${LEVELS.map((o) => optCard('g-level', o, g.level === o.id)).join('')}</div>`;
+      if (g.step === 3) return dots + `<h3 class="wiz-q">¿Cuántos días por semana?</h3>
+        <div class="chips wrap" style="margin-bottom:14px">${[2, 3, 4, 5, 6].map((n) => `<button class="chip big ${g.days.length === n ? 'on' : ''}" data-action="g-ndays" data-v="${n}">${n} días</button>`).join('')}</div>
+        <div class="field"><span>Elige qué días</span>
+          <div class="days">${WEEK_ORDER.map((d) => `<button class="${g.days.includes(d) ? 'on' : ''}" data-action="g-day" data-d="${d}">${DAY_NAME[d].slice(0, 3)}</button>`).join('')}</div>
+        </div>
+        <div class="field"><span>Tiempo por sesión</span>
+          <div class="seg">${DURATIONS.map(([v, l]) => `<button class="${g.dur === v ? 'on' : ''}" data-action="g-dur" data-v="${v}">${l}</button>`).join('')}</div>
+        </div>
+        <p class="muted small">${splitInfo(g.days.length, g.level)}</p>`;
+      // Paso 4: vista previa
+      plan = generatePlan(g);
+      return dots + `<h3 class="wiz-q">Tu plan está listo ✨</h3>
+        <p class="muted" style="margin-top:-6px">${esc(GOALS.find((x) => x.id === g.goal).n)} · ${g.place === 'casa' ? 'Casa' : 'Gimnasio'} · ${esc(LEVELS.find((x) => x.id === g.level).n)} · ${g.days.length} días · ${g.dur} min</p>
+        ${plan.map((r) => `
+          <div class="gen-day">
+            <div class="gen-head"><span class="gen-dayname">${DAY_NAME[r.days[0]]}</span><b>${esc(r.name)}</b><span class="muted small">${r.items.length} ejercicios</span></div>
+            ${r.items.map((it) => { const ex = exById(it.exId); const u = unitOf(ex); return `
+              <button class="gen-ex" data-action="ex-detail" data-id="${esc(ex.id)}">
+                ${thumb(ex)}
+                <span class="grow"><span class="name">${esc(ex.n)}</span><span class="meta">${it.sets} × ${esc(it.reps)}${u === 'reps' ? ' reps' : ' ' + u} · descanso ${fmtRest(it.rest)}</span></span>
+                ${ICON.chev}
+              </button>`; }).join('')}
+          </div>`).join('')}
+        <p class="muted small">Toca un ejercicio para ver cómo se hace. Podrás editar todo después en Rutinas.</p>
+        ${db.routines.length ? `<button class="set-line plain" data-action="g-replace"><span>Reemplazar mis rutinas actuales (${db.routines.length})</span><span class="switch ${g.replace ? 'on' : ''}"></span></button>` : ''}`;
+    };
+    const canNext = () => [g.goal, g.place, g.level, g.days.length][g.step] != null && (g.step !== 3 || g.days.length > 0);
+    const s = openSheet({
+      title: 'Armar mi rutina',
+      full: true,
+      body: stepBody,
+      foot: () => g.step < 4
+        ? `<div class="btn-row">${g.step > 0 ? '<button class="btn" data-action="g-back">Atrás</button>' : ''}<button class="btn primary" data-action="g-next" ${canNext() ? '' : 'disabled style="opacity:.45"'}>${g.step === 3 ? 'Crear mi plan' : 'Siguiente'}</button></div>`
+        : `<button class="btn primary block" data-action="g-save">${ICON.check.replace('<svg', '<svg width="20" height="20"')} Guardar plan</button>
+           <div class="btn-row" style="margin-top:8px"><button class="btn" data-action="g-back">Atrás</button><button class="btn" data-action="g-shuffle">🔄 Otra variante</button></div>`,
+      actions: {
+        'g-goal': (b) => { g.goal = b.dataset.v; go(1); },
+        'g-place': (b) => { g.place = b.dataset.v; if (g.place === 'gym') go(1); else s.refresh(); },
+        'g-equip': (b) => { const v = b.dataset.v; g.equip = g.equip.includes(v) ? g.equip.filter((x) => x !== v) : g.equip.concat(v); s.refresh(); },
+        'g-level': (b) => { g.level = b.dataset.v; go(1); },
+        'g-ndays': (b) => { g.days = DEFAULT_DAYS[+b.dataset.v].slice(); s.refresh(); },
+        'g-day': (b) => {
+          const d = +b.dataset.d;
+          if (g.days.includes(d)) g.days = g.days.filter((x) => x !== d);
+          else if (g.days.length >= 6) { toast('Máximo 6 días: el descanso también cuenta 😉'); return; }
+          else g.days = g.days.concat(d);
+          s.refresh();
+        },
+        'g-dur': (b) => { g.dur = +b.dataset.v; s.refresh(); },
+        'g-next': () => { if (canNext()) go(1); },
+        'g-back': () => go(-1),
+        'g-shuffle': () => { g.seed++; s.refresh(); toast('Nueva variante generada'); },
+        'g-replace': () => { g.replace = !g.replace; s.refresh(); },
+        'g-save': () => {
+          if (!plan || !plan.length) return;
+          db.routines = g.replace ? plan : db.routines.concat(plan);
+          save(); s.close(); ui.tab = 'routines'; setTab('routines');
+          toast(`¡Plan guardado! ${plan.length} rutinas creadas 💪`);
+        }
+      }
+    });
+    function go(delta) {
+      g.step = Math.max(0, Math.min(4, g.step + delta));
+      s.refresh();
+      s.el.querySelector('.sheet-body').scrollTop = 0;
+    }
+  }
+
+  function splitInfo(n, level) {
+    if (!n) return 'Elige al menos un día.';
+    const names = splitFor(n, level).map(([t, v]) => TEMPLATES[t].n + (v && /Empuje|Tirón/.test(TEMPLATES[t].n) ? ' B' : ''));
+    return `Tu semana: ${names.join(' → ')}.`;
   }
 
   /* ================= BIBLIOTECA ================= */
@@ -670,7 +925,7 @@
     const placeTags = e.p.map((p) => `<span class="tag ${p}">${p === 'casa' ? 'Casa' : 'Gym'}</span>`).join(' ');
     return `
       <button class="ex-item ${opts.sel ? 'sel' : ''}" data-action="${opts.action || 'ex-detail'}" data-id="${esc(e.id)}">
-        <span class="avatar">${esc(initials(e.n))}</span>
+        ${thumb(e)}
         <span class="grow">
           <div class="name">${esc(e.n)}</div>
           <div class="meta">${muscleName(e.m)}${e.custom ? ' · Personalizado' : ''} · ${placeTags}</div>
@@ -697,15 +952,22 @@
     const stats = exerciseStats(id);
     const sheet = openSheet({
       title: ex.n,
+      full: true,
       body: () => `
-        <div class="tags" style="margin-bottom:12px">
+        ${demoHtml(ex)}
+        <div class="tags" style="margin:14px 0 10px">
           <span class="tag accent">${muscleName(ex.m)}</span>
           ${ex.p.map((p) => `<span class="tag ${p}">${p === 'casa' ? '🏠 Casa' : '🏋️ Gym'}</span>`).join('')}
           ${ex.custom ? '<span class="tag">Personalizado</span>' : ''}
         </div>
-        ${ex.e ? `<p><b>Equipo:</b> <span class="muted">${esc(ex.e)}</span></p>` : ''}
-        ${ex.d ? `<p class="muted">${esc(ex.d)}</p>` : ''}
-        ${stats.length ? progressHtml(id) : '<div class="card muted small" style="margin-top:14px">Aún no has registrado este ejercicio. Cuando lo hagas verás aquí tu progreso.</div>'}
+        ${ex.d ? `<p class="lead">${esc(ex.d)}</p>` : ''}
+        <div class="info-grid">
+          ${ex.mu ? `<div><span>Músculos</span><b>${esc(ex.mu)}</b></div>` : ''}
+          ${ex.e ? `<div><span>Equipo</span><b>${esc(ex.e)}</b></div>` : ''}
+        </div>
+        ${ex.s && ex.s.length ? `<div class="section-title">Cómo hacerlo</div><ol class="steps">${ex.s.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>` : ''}
+        ${ex.t && ex.t.length ? `<div class="section-title">Consejos clave</div><ul class="tips">${ex.t.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+        ${stats.length ? progressHtml(id) : '<div class="card muted small" style="margin-top:18px">Aún no has registrado este ejercicio. Cuando lo hagas verás aquí tu progreso.</div>'}
         ${ex.custom ? `<button class="btn danger block" data-action="del-exercise" style="margin-top:16px">${ICON.trash} Eliminar ejercicio</button>` : ''}`,
       foot: () => db.routines.length ? `<button class="btn primary block" data-action="ex-to-routine">${ICON.plus} Añadir a una rutina</button>` : '',
       actions: {
@@ -856,7 +1118,7 @@
       const u = unitOf(ex);
       return `
         <button class="ex-item" data-action="ex-progress" data-id="${esc(id)}">
-          <span class="avatar">${esc(initials(ex.n))}</span>
+          ${thumb(ex)}
           <span class="grow"><div class="name">${esc(ex.n)}</div><div class="meta">${o.n} sesiones · último ${esc(fmtDate(o.last, { day: 'numeric', month: 'short' }))}</div></span>
           <span class="tag accent">${best ? `${fmtN(toDisp(best))} ${unit()}` : `${bestR} ${u}`}</span>
         </button>`;
@@ -994,10 +1256,14 @@
           <button class="set-line" data-action="export"><span>⬇️ Exportar copia de seguridad</span>${ICON.chev}</button>
           <label class="set-line"><span>⬆️ Importar copia de seguridad</span>${ICON.chev}<input type="file" accept="application/json,.json" data-import hidden></label>
         </div>
+        <div class="section-title">Imágenes</div>
+        <div class="set-group">
+          <button class="set-line" data-action="cache-images"><span>📥 Guardar imágenes para usar sin internet <span class="muted small" id="img-progress"></span></span>${ICON.chev}</button>
+        </div>
         <div class="set-group">
           <button class="set-line" data-action="reset" style="color:var(--danger)"><span>Borrar todos los datos</span>${ICON.trash.replace('<svg', '<svg width="20" height="20"')}</button>
         </div>
-        <p class="muted small" style="text-align:center">GYMBRO v${VERSION} · ${db.history.length} entrenos · ${db.routines.length} rutinas</p>`,
+        <p class="muted small" style="text-align:center">GYMBRO v${VERSION} · ${db.history.length} entrenos · ${db.routines.length} rutinas<br>Fotos de ejercicios: <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">Free Exercise DB</a> (dominio público)</p>`,
       onInput(t) {
         if (t.dataset.set === 'rest') { db.settings.rest = +t.value; save(); render(); }
       },
@@ -1005,6 +1271,7 @@
         'set-unit': (b) => { db.settings.unit = b.dataset.v; save(); s.refresh(); render(); },
         'set-toggle': (b) => { const k = b.dataset.k; db.settings[k] = !db.settings[k]; save(); s.refresh(); if (k === 'sound' && db.settings.sound) { unlockAudio(); beep(); } },
         'export': exportData,
+        'cache-images': () => cacheImages(s.el.querySelector('#img-progress')),
         'reset': () => ask('¿Borrar todo?', 'Se eliminarán rutinas, historial y ejercicios personalizados de este dispositivo.', 'Borrar todo', true).then((ok) => {
           if (!ok) return;
           db = defaults(); save(); closeAllSheets(); setTab('train'); toast('Datos borrados');
@@ -1031,6 +1298,30 @@
       reader.readAsText(file);
       ev.target.value = '';
     });
+  }
+
+  let caching = false;
+  async function cacheImages(label) {
+    if (caching) return;
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+      toast('Abre la app desde su dirección web (https) para usar esta opción');
+      return;
+    }
+    caching = true;
+    const urls = BASE_EX.filter((e) => e.img).flatMap((e) => [imgSrc(e, 't'), imgSrc(e, 0), imgSrc(e, 1)]);
+    let done = 0, failed = 0;
+    const next = async () => {
+      while (urls.length) {
+        const u = urls.shift();
+        try { const r = await fetch(u); if (!r.ok) failed++; } catch (e) { failed++; }
+        done++;
+        if (label && document.body.contains(label)) label.textContent = `${Math.round((done / (done + urls.length)) * 100)}%`;
+      }
+    };
+    await Promise.all(Array.from({ length: 6 }, next));
+    caching = false;
+    if (label && document.body.contains(label)) label.textContent = failed ? '' : '✓';
+    toast(failed ? `Faltaron ${failed} imágenes: inténtalo con mejor conexión` : 'Imágenes guardadas: ya funcionan sin internet ✅');
   }
 
   function exportData() {
@@ -1151,6 +1442,7 @@
     'new-routine': () => editRoutine(null),
     'edit-routine': (b) => editRoutine(b.dataset.id),
     'sample-routines': loadSamples,
+    'generator': openGenerator,
     'start-routine': (b) => {
       const r = db.routines.find((x) => x.id === b.dataset.id);
       if (!r) return;
@@ -1258,6 +1550,15 @@
   render();
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    const hadController = !!navigator.serviceWorker.controller;
+    const bootAt = Date.now();
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    // Cuando hay una versión nueva: recargar si acabas de abrir la app; si no, avisar.
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) return;
+      const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+      if (Date.now() - bootAt < 15000 && !typing && !sheets.length) { save(); location.reload(); }
+      else toast('Nueva versión de GYMBRO lista: ciérrala y ábrela de nuevo');
+    });
   }
 })();

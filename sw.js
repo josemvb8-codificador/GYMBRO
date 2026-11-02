@@ -1,14 +1,18 @@
 /* GYMBRO service worker: funciona sin conexión.
  * Sirve desde caché al instante y actualiza en segundo plano.
  * Sube CACHE de versión cuando cambies archivos. */
-const CACHE = 'gymbro-v1.0.0';
+const CACHE = 'gymbro-v1.1.0';
 const ASSETS = [
   './', 'index.html', 'styles.css', 'data.js', 'app.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
